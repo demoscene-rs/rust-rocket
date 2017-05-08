@@ -1,11 +1,9 @@
 extern crate byteorder;
 
 use std::io::Cursor;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
+use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use std::io::prelude::*;
 use std::net::TcpStream;
-use std::thread;
-use std::sync::mpsc;
 
 #[derive(Copy, Clone, Debug)]
 struct RocketErr {
@@ -29,7 +27,7 @@ impl Rocket {
     }
 
     pub fn connect(host: &str, port: u16) -> Result<Rocket, RocketErr> {
-        let mut stream = TcpStream::connect((host, port)).expect("Failed to connect");
+        let stream = TcpStream::connect((host, port)).expect("Failed to connect");
 
         let mut rocket = Rocket {
             stream: stream,
@@ -39,21 +37,21 @@ impl Rocket {
 
         rocket.handshake().expect("Failed to handshake");
 
-        rocket.stream.set_nonblocking(true);
+        rocket.stream.set_nonblocking(true).unwrap();
 
         Ok(rocket)
     }
 
     pub fn get_track(&mut self, track: &str) {
         let mut buf = vec![2];
-        buf.write_u32::<BigEndian>(track.len() as u32);
+        buf.write_u32::<BigEndian>(track.len() as u32).unwrap();
         buf.extend_from_slice(&track.as_bytes());
         self.stream.write(&buf).unwrap();
     }
 
     pub fn set_row(&mut self, row: u32) {
         let mut buf = vec![3];
-        buf.write_u32::<BigEndian>(row);
+        buf.write_u32::<BigEndian>(row).unwrap();
         self.stream.write(&buf).unwrap();
     }
 
@@ -154,5 +152,4 @@ fn main() {
         rocket.poll_events();
         std::thread::sleep_ms(1);
     }
-    println!("Hello, world!");
 }
