@@ -5,6 +5,53 @@ use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use std::io::prelude::*;
 use std::net::TcpStream;
 
+#[derive(Debug)]
+enum Interpolation {
+    Step   = 0,
+    Linear = 1,
+    Smooth = 2,
+    Ramp   = 3,
+}
+
+impl From<u8> for Interpolation {
+    fn from(raw: u8) -> Interpolation {
+        match raw {
+            0 => Interpolation::Step,
+            1 => Interpolation::Linear,
+            2 => Interpolation::Smooth,
+            3 => Interpolation::Ramp,
+            _ => Interpolation::Step,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Key {
+    row: u32,
+    value: f32,
+    interpolation: Interpolation,
+}
+
+#[derive(Debug)]
+struct Track {
+    name: String,
+    keys: Vec<Key>,
+}
+
+impl Track {
+    fn new<S: Into<String>>(name: S) -> Track {
+        Track {
+            name: name.into(),
+            keys: Vec::new(),
+        }
+    }
+
+    //TODO set_key(&mut self, key: Key)
+    //TODO delete_key(&mut self, row: u32)
+    //TODO get_value(row: f32) -> f32
+    //  This should work with half-rows
+}
+
 #[derive(Copy, Clone, Debug)]
 struct RocketErr {
 }
@@ -19,6 +66,9 @@ struct Rocket {
     stream: TcpStream,
     state: RocketState,
     cmd: Vec<u8>,
+    tracks: Vec<Track>,
+    row: u32,
+    paused: bool,
 }
 
 impl Rocket {
@@ -32,7 +82,10 @@ impl Rocket {
         let mut rocket = Rocket {
             stream: stream,
             state: RocketState::NewCommand,
-            cmd: vec![],
+            cmd: Vec::new(),
+            tracks: Vec::new(),
+            row: 0,
+            paused: true,
         };
 
         rocket.handshake().expect("Failed to handshake");
@@ -42,14 +95,32 @@ impl Rocket {
         Ok(rocket)
     }
 
-    pub fn get_track(&mut self, track: &str) {
-        let mut buf = vec![2];
-        buf.write_u32::<BigEndian>(track.len() as u32).unwrap();
-        buf.extend_from_slice(&track.as_bytes());
-        self.stream.write(&buf).unwrap();
+    pub fn get_row(&self) -> u32 {
+        self.row
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    pub fn get_track(&mut self, name: &str) -> &Track {
+        if !self.tracks.iter().any(|t| t.name == name) {
+
+            // Send GET_TRACK message
+            let mut buf = vec![2];
+            buf.write_u32::<BigEndian>(name.len() as u32).unwrap();
+            buf.extend_from_slice(&name.as_bytes());
+            self.stream.write(&buf).unwrap();
+
+            self.tracks.push(Track::new(name));
+        }
+        self.tracks.iter().find(|t| t.name == name).unwrap()
     }
 
     pub fn set_row(&mut self, row: u32) {
+        self.row = row;
+
+        // Send SET_ROW message
         let mut buf = vec![3];
         buf.write_u32::<BigEndian>(row).unwrap();
         self.stream.write(&buf).unwrap();
@@ -91,12 +162,18 @@ impl Rocket {
                             let track = cursor.read_u32::<BigEndian>().unwrap();
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             let value = cursor.read_f32::<BigEndian>().unwrap();
-                            let interpolation = cursor.read_u8().unwrap();
+                            //let interpolation = cursor.read_u8().unwrap();
                                 // 0 == step
                                 // 1 == linear
                                 // 2 == smooth
                                 // 3 == ramp
-                            println!("SET_KEY (track: {:?}) (row: {:?}) (value: {:?}) (interpolation: {:?})", track, row, value, interpolation);
+                            let interpolation = Interpolation::from(cursor.read_u8().unwrap());
+                            let key = Key {
+                                row: row,
+                                value: value,
+                                interpolation: interpolation,
+                            };
+                            println!("SET_KEY (track: {:?}) (key: {:?})", track, key);
                         },
                         1 => {
                             let track = cursor.read_u32::<BigEndian>().unwrap();
@@ -106,11 +183,15 @@ impl Rocket {
                         3 => {
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             println!("SET_ROW (row: {:?})", row);
+
+                            self.row = row;
                         },
                         4 => {
                             let flag = cursor.read_u8().unwrap();
                                 // 0 or 1
                             println!("PAUSE {:?}", flag);
+
+                            self.paused = flag == 1;
                         },
                         5 => {
                             println!("SAVE_TRACKS");
