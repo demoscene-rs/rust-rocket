@@ -1,0 +1,7 @@
+[package]
+name = "rust-rocket"
+version = "0.1.0"
+authors = ["Tim Peters <mail@darksecond.nl>"]
+
+[dependencies]
+byteorder = "1"
