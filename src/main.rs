@@ -106,10 +106,13 @@ impl Rocket {
                             println!("DELETE_KEY (track: {:?}) (row: {:?})", track, row);
                         },
                         3 => {
-                            println!("SET_ROW {:?}", cursor.read_u32::<BigEndian>().unwrap());
+                            let row = cursor.read_u32::<BigEndian>().unwrap();
+                            println!("SET_ROW (row: {:?})", row);
                         },
                         4 => {
-                            println!("PAUSE {:?}", cursor.read_u8().unwrap());
+                            let flag = cursor.read_u8().unwrap();
+                                // 0 or 1
+                            println!("PAUSE {:?}", flag);
                         },
                         5 => {
                             println!("SAVE_TRACKS");
@@ -117,6 +120,7 @@ impl Rocket {
                         _ => println!("Unknown {:?}", cmd),
                     }
                 }
+
                 self.cmd.clear();
                 self.state = RocketState::NewCommand;
             },
