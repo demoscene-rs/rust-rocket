@@ -62,6 +62,18 @@ enum RocketState {
     CompleteCommand,
 }
 
+#[derive(Debug)]
+enum Event {
+    SetRow(u32),
+    Pause(bool),
+}
+
+enum ReceiveResult {
+    Some(Event),
+    None,
+    Incomplete,
+}
+
 struct Rocket {
     stream: TcpStream,
     state: RocketState,
@@ -126,7 +138,18 @@ impl Rocket {
         self.stream.write(&buf).unwrap();
     }
 
-    pub fn poll_events(&mut self) {
+    pub fn poll_events(&mut self) -> Option<Event> {
+        loop {
+            let result = self.poll_event();
+            match result {
+                ReceiveResult::None => return None,
+                ReceiveResult::Incomplete => (),
+                ReceiveResult::Some(event) => return Some(event),
+            }
+        }
+    }
+
+    fn poll_event(&mut self) -> ReceiveResult {
         match self.state {
             RocketState::NewCommand => {
                 let mut buf = [0;1];
@@ -140,6 +163,9 @@ impl Rocket {
                         5 => self.state = RocketState::CompleteCommand, //SAVE_TRACKS
                         _ => self.state = RocketState::CompleteCommand,
                     }
+                    ReceiveResult::Incomplete
+                } else {
+                    ReceiveResult::None
                 }
             },
             RocketState::IncompleteCommand(bytes) => {
@@ -151,9 +177,13 @@ impl Rocket {
                     } else {
                         self.state = RocketState::CompleteCommand;
                     }
+                    ReceiveResult::Incomplete
+                } else {
+                    ReceiveResult::None
                 }
             },
             RocketState::CompleteCommand => {
+                let mut result = ReceiveResult::None;
                 {
                     let mut cursor = Cursor::new(&self.cmd);
                     let cmd = cursor.read_u8().unwrap();
@@ -162,11 +192,6 @@ impl Rocket {
                             let track = cursor.read_u32::<BigEndian>().unwrap();
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             let value = cursor.read_f32::<BigEndian>().unwrap();
-                            //let interpolation = cursor.read_u8().unwrap();
-                                // 0 == step
-                                // 1 == linear
-                                // 2 == smooth
-                                // 3 == ramp
                             let interpolation = Interpolation::from(cursor.read_u8().unwrap());
                             let key = Key {
                                 row: row,
@@ -185,6 +210,8 @@ impl Rocket {
                             println!("SET_ROW (row: {:?})", row);
 
                             self.row = row;
+
+                            result = ReceiveResult::Some(Event::SetRow(self.row));
                         },
                         4 => {
                             let flag = cursor.read_u8().unwrap();
@@ -192,6 +219,7 @@ impl Rocket {
                             println!("PAUSE {:?}", flag);
 
                             self.paused = flag == 1;
+                            result = ReceiveResult::Some(Event::Pause(self.paused));
                         },
                         5 => {
                             println!("SAVE_TRACKS");
@@ -202,6 +230,8 @@ impl Rocket {
 
                 self.cmd.clear();
                 self.state = RocketState::NewCommand;
+
+                result
             },
         }
     }
@@ -230,7 +260,9 @@ fn main() {
     rocket.set_row(5);
 
     loop {
-        rocket.poll_events();
+        if let Some(event) = rocket.poll_events() {
+            println!("{:?}", event);
+        }
         std::thread::sleep_ms(1);
     }
 }
