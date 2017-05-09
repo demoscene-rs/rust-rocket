@@ -2,6 +2,7 @@
 name = "rust-rocket"
 version = "0.1.0"
 authors = ["Tim Peters <mail@darksecond.nl>"]
+license = "MIT"
 
 [dependencies]
 byteorder = "1"
