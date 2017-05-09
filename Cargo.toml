@@ -3,6 +3,9 @@ name = "rust-rocket"
 version = "0.1.0"
 authors = ["Tim Peters <mail@darksecond.nl>"]
 license = "MIT"
+description = """
+A client implementation of GNU Rocket.
+"""
 
 [dependencies]
 byteorder = "1"
