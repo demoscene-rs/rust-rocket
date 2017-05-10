@@ -1,9 +1,9 @@
 #[derive(Debug)]
 pub enum Interpolation {
-    Step   = 0,
+    Step = 0,
     Linear = 1,
     Smooth = 2,
-    Ramp   = 3,
+    Ramp = 3,
 }
 
 impl From<u8> for Interpolation {

@@ -80,14 +80,14 @@ impl Track {
             return self.keys[0].value;
         }
 
-        if lower_row >= self.keys[self.keys.len()-1].row {
-            return self.keys[self.keys.len()-1].value;
+        if lower_row >= self.keys[self.keys.len() - 1].row {
+            return self.keys[self.keys.len() - 1].value;
         }
 
-        let pos = self.get_insert_position(lower_row).unwrap()-1;
+        let pos = self.get_insert_position(lower_row).unwrap() - 1;
 
         let lower = &self.keys[pos];
-        let higher = &self.keys[pos+1];
+        let higher = &self.keys[pos + 1];
 
         let t = (row - (lower.row as f32)) / ((higher.row as f32) - (lower.row as f32));
         let it = lower.interpolation.interpolate(t);

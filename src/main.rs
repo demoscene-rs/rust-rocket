@@ -17,7 +17,7 @@ fn main() {
                         let track1 = rocket.get_track("test");
                         println!("{:?}", track1.get_value(row));
                     }
-                },
+                }
                 _ => (),
             }
             println!("{:?}", event);

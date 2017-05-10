@@ -8,8 +8,7 @@ use std::io::prelude::*;
 use std::net::TcpStream;
 
 #[derive(Copy, Clone, Debug)]
-pub struct RocketErr {
-}
+pub struct RocketErr {}
 
 enum RocketState {
     NewCommand,
@@ -107,12 +106,12 @@ impl Rocket {
     fn poll_event(&mut self) -> ReceiveResult {
         match self.state {
             RocketState::NewCommand => {
-                let mut buf = [0;1];
+                let mut buf = [0; 1];
                 if let Ok(_) = self.stream.read_exact(&mut buf) {
                     self.cmd.extend_from_slice(&buf);
                     match self.cmd[0] {
-                        0 => self.state = RocketState::IncompleteCommand(4+4+4+1), //SET_KEY
-                        1 => self.state = RocketState::IncompleteCommand(4+4), //DELETE_KEY
+                        0 => self.state = RocketState::IncompleteCommand(4 + 4 + 4 + 1), //SET_KEY
+                        1 => self.state = RocketState::IncompleteCommand(4 + 4), //DELETE_KEY
                         3 => self.state = RocketState::IncompleteCommand(4), //SET_ROW
                         4 => self.state = RocketState::IncompleteCommand(1), //PAUSE
                         5 => self.state = RocketState::CompleteCommand, //SAVE_TRACKS
@@ -122,13 +121,13 @@ impl Rocket {
                 } else {
                     ReceiveResult::None
                 }
-            },
+            }
             RocketState::IncompleteCommand(bytes) => {
                 let mut buf = vec![0;bytes];
                 if let Ok(bytes_read) = self.stream.read(&mut buf) {
                     self.cmd.extend_from_slice(&buf);
-                    if bytes-bytes_read > 0 {
-                        self.state = RocketState::IncompleteCommand(bytes-bytes_read);
+                    if bytes - bytes_read > 0 {
+                        self.state = RocketState::IncompleteCommand(bytes - bytes_read);
                     } else {
                         self.state = RocketState::CompleteCommand;
                     }
@@ -136,7 +135,7 @@ impl Rocket {
                 } else {
                     ReceiveResult::None
                 }
-            },
+            }
             RocketState::CompleteCommand => {
                 let mut result = ReceiveResult::None;
                 {
@@ -144,7 +143,8 @@ impl Rocket {
                     let cmd = cursor.read_u8().unwrap();
                     match cmd {
                         0 => {
-                            let mut track = &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
+                            let mut track = &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as
+                                                 usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             let value = cursor.read_f32::<BigEndian>().unwrap();
                             let interpolation = Interpolation::from(cursor.read_u8().unwrap());
@@ -153,14 +153,15 @@ impl Rocket {
 
                             track.set_key(key);
 
-                        },
+                        }
                         1 => {
-                            let mut track = &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
+                            let mut track = &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as
+                                                 usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             println!("DELETE_KEY (track: {:?}) (row: {:?})", track, row);
 
                             track.delete_key(row);
-                        },
+                        }
                         3 => {
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             println!("SET_ROW (row: {:?})", row);
@@ -168,18 +169,18 @@ impl Rocket {
                             self.row = row;
 
                             result = ReceiveResult::Some(Event::SetRow(self.row));
-                        },
+                        }
                         4 => {
                             let flag = cursor.read_u8().unwrap();
-                                // 0 or 1
+                            // 0 or 1
                             println!("PAUSE {:?}", flag);
 
                             self.paused = flag == 1;
                             result = ReceiveResult::Some(Event::Pause(self.paused));
-                        },
+                        }
                         5 => {
                             println!("SAVE_TRACKS");
-                        },
+                        }
                         _ => println!("Unknown {:?}", cmd),
                     }
                 }
@@ -188,7 +189,7 @@ impl Rocket {
                 self.state = RocketState::NewCommand;
 
                 result
-            },
+            }
         }
     }
 
@@ -197,14 +198,13 @@ impl Rocket {
         let server_greeting = "hello, demo!";
 
         self.stream.write(client_greeting.as_bytes()).expect("Failed to write client greeting");
-        let mut buf = [0;12];
+        let mut buf = [0; 12];
         self.stream.read_exact(&mut buf).expect("Failed to read server greeting");
         let read_greeting = std::str::from_utf8(&buf).expect("Failed to convert buf to utf8");
         if read_greeting == server_greeting {
             Ok(())
         } else {
-            Err(RocketErr{})
+            Err(RocketErr {})
         }
     }
 }
-
