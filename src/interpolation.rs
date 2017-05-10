@@ -1,8 +1,16 @@
+//! This module contains anything related to interpolation.
+
 #[derive(Debug, Copy, Clone)]
+/// The `Interpolation` Type.
+/// This represents the various forms of interpolation that can be performed.
 pub enum Interpolation {
+    /// `0`
     Step = 0,
+    /// `t`
     Linear = 1,
+    /// `t * t * (3 - 2 * t)`
     Smooth = 2,
+    /// `t.powi(2)`
     Ramp = 3,
 }
 
@@ -19,6 +27,17 @@ impl From<u8> for Interpolation {
 }
 
 impl Interpolation {
+    /// This performs the interpolation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// assert_eq!(Interpolation::Linear.interpolate(0.5), 0.5);
+    /// ```
+    ///
+    /// ```
+    /// assert_eq!(Interpolation::Step.interpolate(0.5), 0);
+    /// ```
     pub fn interpolate(&self, t: f32) -> f32 {
         match self {
             &Interpolation::Step => 0.0,

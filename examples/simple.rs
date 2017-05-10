@@ -8,16 +8,20 @@ fn main() {
     rocket.get_track("test2");
     rocket.get_track("a:test2");
 
+    let mut current_row = 0;
     loop {
         if let Some(event) = rocket.poll_events() {
             match event {
+                Event::SetRow(row) => {
+                    println!("SetRow (row: {:?})", row);
+                    current_row = row;
+                },
                 Event::Pause(_) => {
-                    let row = rocket.get_row() as f32;
                     {
                         let track1 = rocket.get_track("test");
-                        println!("{:?}", track1.get_value(row));
+                        println!("Pause (value: {:?}) (row: {:?})", track1.get_value(current_row as f32), current_row);
                     }
-                }
+                },
                 _ => (),
             }
             println!("{:?}", event);

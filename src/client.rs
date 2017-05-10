@@ -1,3 +1,4 @@
+//! This module contains the main client code, including the `Rocket` type.
 use interpolation::*;
 use track::*;
 
@@ -8,6 +9,7 @@ use std::io::prelude::*;
 use std::net::TcpStream;
 
 #[derive(Copy, Clone, Debug)]
+/// The `RocketErr` Type. This is the main error type.
 pub struct RocketErr {}
 
 #[derive(Debug)]
@@ -18,9 +20,14 @@ enum RocketState {
 }
 
 #[derive(Debug, Copy, Clone)]
+/// The `Event` Type. These are the various events from the tracker.
 pub enum Event {
+    /// The tracker changes row.
     SetRow(u32),
+    /// The tracker pauses or unpauses.
     Pause(bool),
+    /// The tracker asks us to save our track data.
+    SaveTracks,
 }
 
 enum ReceiveResult {
@@ -30,20 +37,51 @@ enum ReceiveResult {
 }
 
 #[derive(Debug)]
+/// The `Rocket` type. This contains the connected socket and other fields.
 pub struct Rocket {
     stream: TcpStream,
     state: RocketState,
     cmd: Vec<u8>,
     tracks: Vec<Track>,
-    row: u32,
-    paused: bool,
 }
 
 impl Rocket {
+    /// Construct a new Rocket.
+    ///
+    /// This constructs a new rocket and connect to localhost on port 1338.
+    ///
+    /// # Errors
+    ///
+    /// If a connection cannot be established, or if the handshake fails.
+    /// This will raise a `RocketErr`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rocket::Rocket;
+    ///
+    /// let mut rocket = Rocket::new();
+    /// ```
     pub fn new() -> Result<Rocket, RocketErr> {
         Rocket::connect("localhost", 1338)
     }
 
+    /// Construct a new Rocket.
+    ///
+    /// This constructs a new rocket and connects to a specified host and port.
+    ///
+    /// # Errors
+    ///
+    /// If a connection cannot be established, or if the handshake fails.
+    /// This will raise a `RocketErr`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rocket::Rocket;
+    ///
+    /// let mut rocket = Rocket::connect("localhost", 1338);
+    /// ```
     pub fn connect(host: &str, port: u16) -> Result<Rocket, RocketErr> {
         let stream = TcpStream::connect((host, port)).expect("Failed to connect");
 
@@ -52,8 +90,6 @@ impl Rocket {
             state: RocketState::NewCommand,
             cmd: Vec::new(),
             tracks: Vec::new(),
-            row: 0,
-            paused: true,
         };
 
         rocket.handshake().expect("Failed to handshake");
@@ -63,14 +99,16 @@ impl Rocket {
         Ok(rocket)
     }
 
-    pub fn get_row(&self) -> u32 {
-        self.row
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.paused
-    }
-
+    /// Get a track by name.
+    ///
+    /// If the track does not yet exist it will be created.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let track = rocket.get_track("namespace:track");
+    /// track.get_value(3.5);
+    /// ```
     pub fn get_track(&mut self, name: &str) -> &Track {
         if !self.tracks.iter().any(|t| t.get_name() == name) {
 
@@ -78,22 +116,40 @@ impl Rocket {
             let mut buf = vec![2];
             buf.write_u32::<BigEndian>(name.len() as u32).unwrap();
             buf.extend_from_slice(&name.as_bytes());
-            self.stream.write(&buf).unwrap();
+            self.stream.write_all(&buf).unwrap();
 
             self.tracks.push(Track::new(name));
         }
         self.tracks.iter().find(|t| t.get_name() == name).unwrap()
     }
 
+    /// Send a SetRow message.
+    ///
+    /// This changes the current row on the tracker side.
     pub fn set_row(&mut self, row: u32) {
-        self.row = row;
-
         // Send SET_ROW message
         let mut buf = vec![3];
         buf.write_u32::<BigEndian>(row).unwrap();
-        self.stream.write(&buf).unwrap();
+        self.stream.write_all(&buf).unwrap();
     }
 
+    /// Poll for new events from the tracker.
+    ///
+    /// This polls from events from the tracker.
+    /// You should call this fairly often your main loop.
+    /// It is recommended to keep calling this as long as your receive
+    /// Some(Event).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///  while let Some(Event) = rocket.poll_events() {
+    ///      match event {
+    ///          // Do something with the various events.
+    ///          _ => (),
+    ///      }
+    ///  }
+    /// ```
     pub fn poll_events(&mut self) -> Option<Event> {
         loop {
             let result = self.poll_event();
@@ -151,7 +207,6 @@ impl Rocket {
                             let value = cursor.read_f32::<BigEndian>().unwrap();
                             let interpolation = Interpolation::from(cursor.read_u8().unwrap());
                             let key = Key::new(row, value, interpolation);
-                            println!("SET_KEY (track: {:?}) (key: {:?})", track, key);
 
                             track.set_key(key);
 
@@ -160,28 +215,19 @@ impl Rocket {
                             let mut track = &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as
                                                  usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
-                            println!("DELETE_KEY (track: {:?}) (row: {:?})", track, row);
 
                             track.delete_key(row);
                         }
                         3 => {
                             let row = cursor.read_u32::<BigEndian>().unwrap();
-                            println!("SET_ROW (row: {:?})", row);
-
-                            self.row = row;
-
-                            result = ReceiveResult::Some(Event::SetRow(self.row));
+                            result = ReceiveResult::Some(Event::SetRow(row));
                         }
                         4 => {
-                            let flag = cursor.read_u8().unwrap();
-                            // 0 or 1
-                            println!("PAUSE {:?}", flag);
-
-                            self.paused = flag == 1;
-                            result = ReceiveResult::Some(Event::Pause(self.paused));
+                            let flag = cursor.read_u8().unwrap() == 1;
+                            result = ReceiveResult::Some(Event::Pause(flag));
                         }
                         5 => {
-                            println!("SAVE_TRACKS");
+                            result = ReceiveResult::Some(Event::SaveTracks);
                         }
                         _ => println!("Unknown {:?}", cmd),
                     }

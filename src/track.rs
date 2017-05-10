@@ -1,6 +1,9 @@
+//! This module contains `Key` and `Track` types.
+
 use interpolation::*;
 
 #[derive(Debug, Clone, Copy)]
+/// The `Key` Type.
 pub struct Key {
     row: u32,
     value: f32,
@@ -8,6 +11,7 @@ pub struct Key {
 }
 
 impl Key {
+    /// Construct a new `Key`.
     pub fn new(row: u32, value: f32, interp: Interpolation) -> Key {
         Key {
             row: row,
@@ -18,12 +22,14 @@ impl Key {
 }
 
 #[derive(Debug)]
+/// The `Track` Type. This is a collection of `Key`s with a name.
 pub struct Track {
     name: String,
     keys: Vec<Key>,
 }
 
 impl Track {
+    /// Construct a new Track with a name.
     pub fn new<S: Into<String>>(name: S) -> Track {
         Track {
             name: name.into(),
@@ -31,6 +37,7 @@ impl Track {
         }
     }
 
+    /// Get the name of the track.
     pub fn get_name(&self) -> &str {
         self.name.as_str()
     }
@@ -46,6 +53,7 @@ impl Track {
         }
     }
 
+    /// Insert or update a key on a track.
     pub fn set_key(&mut self, key: Key) {
         if let Some(pos) = self.get_exact_position(key.row) {
             self.keys[pos] = key;
@@ -63,12 +71,19 @@ impl Track {
         println!("{:?}", self.keys);
     }
 
+    /// Delete a key from a track.
+    ///
+    /// If a key does not exist this will do nothing.
     pub fn delete_key(&mut self, row: u32) {
         if let Some(pos) = self.get_exact_position(row) {
             self.keys.remove(pos);
         }
     }
 
+    /// Get a value based on a row.
+    ///
+    /// The row can be between two integers.
+    /// This will perform the required interpolation.
     pub fn get_value(&self, row: f32) -> f32 {
         if self.keys.len() <= 0 {
             return 0.0;

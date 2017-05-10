@@ -3,7 +3,8 @@ Rust Rocket
 
 A rust implementation of the client library of GNU Rocket.
 
-A very basic example can be found in [src/main.rs](src/main.rs).
+A very basic example can be found in [examples/simple.rs](examples/simple.rs).
+It can be run with `cargo run --example simple`
 
 Links
 =====
