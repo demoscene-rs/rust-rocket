@@ -10,6 +10,7 @@ use std::net::TcpStream;
 #[derive(Copy, Clone, Debug)]
 pub struct RocketErr {}
 
+#[derive(Debug)]
 enum RocketState {
     NewCommand,
     IncompleteCommand(usize),
@@ -28,6 +29,7 @@ enum ReceiveResult {
     Incomplete,
 }
 
+#[derive(Debug)]
 pub struct Rocket {
     stream: TcpStream,
     state: RocketState,

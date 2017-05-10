@@ -1,6 +1,6 @@
 use interpolation::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Key {
     row: u32,
     value: f32,
