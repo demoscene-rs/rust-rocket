@@ -58,14 +58,12 @@ impl Track {
         if let Some(pos) = self.get_exact_position(key.row) {
             self.keys[pos] = key;
             println!("Updating {}", pos);
+        } else if let Some(pos) = self.get_insert_position(key.row) {
+            println!("inserting {}", pos);
+            self.keys.insert(pos, key);
         } else {
-            if let Some(pos) = self.get_insert_position(key.row) {
-                println!("inserting {}", pos);
-                self.keys.insert(pos, key);
-            } else {
-                self.keys.push(key);
-                println!("pushing");
-            }
+            self.keys.push(key);
+            println!("pushing");
         }
 
         println!("{:?}", self.keys);
@@ -85,7 +83,7 @@ impl Track {
     /// The row can be between two integers.
     /// This will perform the required interpolation.
     pub fn get_value(&self, row: f32) -> f32 {
-        if self.keys.len() <= 0 {
+        if self.keys.is_empty() {
             return 0.0;
         }
 

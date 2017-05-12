@@ -14,9 +14,9 @@ pub struct RocketErr {}
 
 #[derive(Debug)]
 enum RocketState {
-    NewCommand,
-    IncompleteCommand(usize),
-    CompleteCommand,
+    New,
+    Incomplete(usize),
+    Complete,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -87,7 +87,7 @@ impl Rocket {
 
         let mut rocket = Rocket {
             stream: stream,
-            state: RocketState::NewCommand,
+            state: RocketState::New,
             cmd: Vec::new(),
             tracks: Vec::new(),
         };
@@ -163,38 +163,38 @@ impl Rocket {
 
     fn poll_event(&mut self) -> ReceiveResult {
         match self.state {
-            RocketState::NewCommand => {
+            RocketState::New => {
                 let mut buf = [0; 1];
-                if let Ok(_) = self.stream.read_exact(&mut buf) {
+                if self.stream.read_exact(&mut buf).is_ok() {
                     self.cmd.extend_from_slice(&buf);
                     match self.cmd[0] {
-                        0 => self.state = RocketState::IncompleteCommand(4 + 4 + 4 + 1), //SET_KEY
-                        1 => self.state = RocketState::IncompleteCommand(4 + 4), //DELETE_KEY
-                        3 => self.state = RocketState::IncompleteCommand(4), //SET_ROW
-                        4 => self.state = RocketState::IncompleteCommand(1), //PAUSE
-                        5 => self.state = RocketState::CompleteCommand, //SAVE_TRACKS
-                        _ => self.state = RocketState::CompleteCommand,
+                        0 => self.state = RocketState::Incomplete(4 + 4 + 4 + 1), //SET_KEY
+                        1 => self.state = RocketState::Incomplete(4 + 4), //DELETE_KEY
+                        3 => self.state = RocketState::Incomplete(4), //SET_ROW
+                        4 => self.state = RocketState::Incomplete(1), //PAUSE
+                        5 => self.state = RocketState::Complete, //SAVE_TRACKS
+                        _ => self.state = RocketState::Complete, // Error / Unknown
                     }
                     ReceiveResult::Incomplete
                 } else {
                     ReceiveResult::None
                 }
             }
-            RocketState::IncompleteCommand(bytes) => {
+            RocketState::Incomplete(bytes) => {
                 let mut buf = vec![0;bytes];
                 if let Ok(bytes_read) = self.stream.read(&mut buf) {
                     self.cmd.extend_from_slice(&buf);
                     if bytes - bytes_read > 0 {
-                        self.state = RocketState::IncompleteCommand(bytes - bytes_read);
+                        self.state = RocketState::Incomplete(bytes - bytes_read);
                     } else {
-                        self.state = RocketState::CompleteCommand;
+                        self.state = RocketState::Complete;
                     }
                     ReceiveResult::Incomplete
                 } else {
                     ReceiveResult::None
                 }
             }
-            RocketState::CompleteCommand => {
+            RocketState::Complete => {
                 let mut result = ReceiveResult::None;
                 {
                     let mut cursor = Cursor::new(&self.cmd);
@@ -234,7 +234,7 @@ impl Rocket {
                 }
 
                 self.cmd.clear();
-                self.state = RocketState::NewCommand;
+                self.state = RocketState::New;
 
                 result
             }
@@ -245,7 +245,7 @@ impl Rocket {
         let client_greeting = "hello, synctracker!";
         let server_greeting = "hello, demo!";
 
-        self.stream.write(client_greeting.as_bytes()).expect("Failed to write client greeting");
+        self.stream.write_all(client_greeting.as_bytes()).expect("Failed to write client greeting");
         let mut buf = [0; 12];
         self.stream.read_exact(&mut buf).expect("Failed to read server greeting");
         let read_greeting = std::str::from_utf8(&buf).expect("Failed to convert buf to utf8");

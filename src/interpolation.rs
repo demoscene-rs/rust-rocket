@@ -39,11 +39,11 @@ impl Interpolation {
     /// assert_eq!(Interpolation::Step.interpolate(0.5), 0);
     /// ```
     pub fn interpolate(&self, t: f32) -> f32 {
-        match self {
-            &Interpolation::Step => 0.0,
-            &Interpolation::Linear => t,
-            &Interpolation::Smooth => t * t * (3.0 - 2.0 * t),
-            &Interpolation::Ramp => t.powi(2),
+        match *self {
+            Interpolation::Step => 0.0,
+            Interpolation::Linear => t,
+            Interpolation::Smooth => t * t * (3.0 - 2.0 * t),
+            Interpolation::Ramp => t.powi(2),
         }
     }
 }
