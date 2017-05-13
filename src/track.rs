@@ -57,16 +57,11 @@ impl Track {
     pub fn set_key(&mut self, key: Key) {
         if let Some(pos) = self.get_exact_position(key.row) {
             self.keys[pos] = key;
-            println!("Updating {}", pos);
         } else if let Some(pos) = self.get_insert_position(key.row) {
-            println!("inserting {}", pos);
             self.keys.insert(pos, key);
         } else {
             self.keys.push(key);
-            println!("pushing");
         }
-
-        println!("{:?}", self.keys);
     }
 
     /// Delete a key from a track.
