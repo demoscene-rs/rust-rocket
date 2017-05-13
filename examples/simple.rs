@@ -4,9 +4,9 @@ use rust_rocket::{Rocket, Event};
 
 fn main() {
     let mut rocket = Rocket::new().unwrap();
-    rocket.get_track("test");
-    rocket.get_track("test2");
-    rocket.get_track("a:test2");
+    rocket.get_track_mut("test");
+    rocket.get_track_mut("test2");
+    rocket.get_track_mut("a:test2");
 
     let mut current_row = 0;
     loop {
