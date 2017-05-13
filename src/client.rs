@@ -106,10 +106,10 @@ impl Rocket {
     /// # Examples
     ///
     /// ```
-    /// let track = rocket.get_track("namespace:track");
+    /// let track = rocket.get_track_mut("namespace:track");
     /// track.get_value(3.5);
     /// ```
-    pub fn get_track(&mut self, name: &str) -> &Track {
+    pub fn get_track_mut(&mut self, name: &str) -> &Track {
         if !self.tracks.iter().any(|t| t.get_name() == name) {
 
             // Send GET_TRACK message
@@ -120,6 +120,14 @@ impl Rocket {
 
             self.tracks.push(Track::new(name));
         }
+        self.tracks.iter().find(|t| t.get_name() == name).unwrap()
+    }
+
+    /// Get Track by name.
+    ///
+    /// If it does not exist, it will panic.
+    /// You should use `get_track_mut` instead.
+    pub fn get_track(&self, name: &str) -> &Track {
         self.tracks.iter().find(|t| t.get_name() == name).unwrap()
     }
 
