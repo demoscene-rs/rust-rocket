@@ -17,10 +17,8 @@ fn main() {
                     current_row = row;
                 },
                 Event::Pause(_) => {
-                    {
-                        let track1 = rocket.get_track("test");
-                        println!("Pause (value: {:?}) (row: {:?})", track1.get_value(current_row as f32), current_row);
-                    }
+                    let track1 = rocket.get_track("test").unwrap();
+                    println!("Pause (value: {:?}) (row: {:?})", track1.get_value(current_row as f32), current_row);
                 },
                 _ => (),
             }

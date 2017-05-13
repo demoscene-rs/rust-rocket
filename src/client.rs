@@ -109,7 +109,7 @@ impl Rocket {
     /// let track = rocket.get_track_mut("namespace:track");
     /// track.get_value(3.5);
     /// ```
-    pub fn get_track_mut(&mut self, name: &str) -> &Track {
+    pub fn get_track_mut(&mut self, name: &str) -> &mut Track {
         if !self.tracks.iter().any(|t| t.get_name() == name) {
 
             // Send GET_TRACK message
@@ -120,15 +120,14 @@ impl Rocket {
 
             self.tracks.push(Track::new(name));
         }
-        self.tracks.iter().find(|t| t.get_name() == name).unwrap()
+        self.tracks.iter_mut().find(|t| t.get_name() == name).unwrap()
     }
 
     /// Get Track by name.
     ///
-    /// If it does not exist, it will panic.
-    /// You should use `get_track_mut` instead.
-    pub fn get_track(&self, name: &str) -> &Track {
-        self.tracks.iter().find(|t| t.get_name() == name).unwrap()
+    /// You should use `get_track_mut` to create a track.
+    pub fn get_track(&self, name: &str) -> Option<&Track> {
+        self.tracks.iter().find(|t| t.get_name() == name)
     }
 
     /// Send a SetRow message.
