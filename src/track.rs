@@ -47,10 +47,14 @@ impl Track {
     }
 
     fn get_insert_position(&self, row: u32) -> Option<usize> {
-        match self.keys.iter().position(|k| k.row >= row) {
-            Some(pos) => Some(pos),
-            None => None,
-        }
+        self.keys.iter().position(|k| k.row >= row)
+    }
+
+    fn get_lower_bound_position(&self, row: u32) -> usize {
+        self.keys
+            .iter()
+            .position(|k| k.row > row)
+            .unwrap_or(self.keys.len()) - 1
     }
 
     /// Insert or update a key on a track.
@@ -92,7 +96,7 @@ impl Track {
             return self.keys[self.keys.len() - 1].value;
         }
 
-        let pos = self.get_insert_position(lower_row).unwrap() - 1;
+        let pos = self.get_lower_bound_position(lower_row);
 
         let lower = &self.keys[pos];
         let higher = &self.keys[pos + 1];
@@ -101,5 +105,30 @@ impl Track {
         let it = lower.interpolation.interpolate(t);
 
         (lower.value as f32) + ((higher.value as f32) - (lower.value as f32)) * it
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_three_keys() {
+        let mut track = Track::new("test");
+        track.set_key(Key::new(0, 1.0, Interpolation::Step));
+        track.set_key(Key::new(5, 0.0, Interpolation::Step));
+        track.set_key(Key::new(10, 1.0, Interpolation::Step));
+
+        assert_eq!(track.get_value(-1.), 1.0);
+        assert_eq!(track.get_value(0.), 1.0);
+        assert_eq!(track.get_value(1.), 1.0);
+
+        assert_eq!(track.get_value(4.), 1.0);
+        assert_eq!(track.get_value(5.), 0.0);
+        assert_eq!(track.get_value(6.), 0.0);
+
+        assert_eq!(track.get_value(9.), 0.0);
+        assert_eq!(track.get_value(10.), 1.0);
+        assert_eq!(track.get_value(11.), 1.0);
     }
 }
