@@ -32,11 +32,19 @@ impl Interpolation {
     /// # Examples
     ///
     /// ```
+    /// # extern crate rust_rocket;
+    /// # use rust_rocket::interpolation::Interpolation;
+    /// # fn main() {
     /// assert_eq!(Interpolation::Linear.interpolate(0.5), 0.5);
+    /// # }
     /// ```
     ///
     /// ```
-    /// assert_eq!(Interpolation::Step.interpolate(0.5), 0);
+    /// # extern crate rust_rocket;
+    /// # use rust_rocket::interpolation::Interpolation;
+    /// # fn main() {
+    /// assert_eq!(Interpolation::Step.interpolate(0.5), 0.);
+    /// # }
     /// ```
     pub fn interpolate(&self, t: f32) -> f32 {
         match *self {

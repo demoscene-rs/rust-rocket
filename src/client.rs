@@ -4,7 +4,7 @@ use track::*;
 
 use std;
 use std::io::Cursor;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::prelude::*;
 use std::net::TcpStream;
 
@@ -57,10 +57,13 @@ impl Rocket {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use rocket::Rocket;
+    /// ```rust,no_run
+    /// # extern crate rust_rocket;
+    /// use rust_rocket::Rocket;
     ///
+    /// # fn main() {
     /// let mut rocket = Rocket::new();
+    /// # }
     /// ```
     pub fn new() -> Result<Rocket, RocketErr> {
         Rocket::connect("localhost", 1338)
@@ -77,10 +80,13 @@ impl Rocket {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use rocket::Rocket;
+    /// ```rust,no_run
+    /// # extern crate rust_rocket;
+    /// use rust_rocket::Rocket;
     ///
+    /// # fn main() {
     /// let mut rocket = Rocket::connect("localhost", 1338);
+    /// # }
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Rocket, RocketErr> {
         let stream = TcpStream::connect((host, port)).expect("Failed to connect");
@@ -94,7 +100,10 @@ impl Rocket {
 
         rocket.handshake().expect("Failed to handshake");
 
-        rocket.stream.set_nonblocking(true).expect("Failed to set nonblocking mode");
+        rocket
+            .stream
+            .set_nonblocking(true)
+            .expect("Failed to set nonblocking mode");
 
         Ok(rocket)
     }
@@ -105,13 +114,17 @@ impl Rocket {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
+    /// # extern crate rust_rocket;
+    /// # use rust_rocket::Rocket;
+    /// # fn main() {
+    /// # let mut rocket = Rocket::new().unwrap();
     /// let track = rocket.get_track_mut("namespace:track");
     /// track.get_value(3.5);
+    /// # }
     /// ```
     pub fn get_track_mut(&mut self, name: &str) -> &mut Track {
         if !self.tracks.iter().any(|t| t.get_name() == name) {
-
             // Send GET_TRACK message
             let mut buf = vec![2];
             buf.write_u32::<BigEndian>(name.len() as u32).unwrap();
@@ -120,7 +133,10 @@ impl Rocket {
 
             self.tracks.push(Track::new(name));
         }
-        self.tracks.iter_mut().find(|t| t.get_name() == name).unwrap()
+        self.tracks
+            .iter_mut()
+            .find(|t| t.get_name() == name)
+            .unwrap()
     }
 
     /// Get Track by name.
@@ -149,13 +165,18 @@ impl Rocket {
     ///
     /// # Examples
     ///
-    /// ```
-    ///  while let Some(Event) = rocket.poll_events() {
-    ///      match event {
-    ///          // Do something with the various events.
-    ///          _ => (),
-    ///      }
-    ///  }
+    /// ```rust,no_run
+    /// # extern crate rust_rocket;
+    /// # use rust_rocket::Rocket;
+    /// # fn main() {
+    /// # let mut rocket = Rocket::new().unwrap();
+    /// while let Some(event) = rocket.poll_events() {
+    ///     match event {
+    ///         // Do something with the various events.
+    ///         _ => (),
+    ///     }
+    /// }
+    /// # }
     /// ```
     pub fn poll_events(&mut self) -> Option<Event> {
         loop {
@@ -176,11 +197,11 @@ impl Rocket {
                     self.cmd.extend_from_slice(&buf);
                     match self.cmd[0] {
                         0 => self.state = RocketState::Incomplete(4 + 4 + 4 + 1), //SET_KEY
-                        1 => self.state = RocketState::Incomplete(4 + 4), //DELETE_KEY
-                        3 => self.state = RocketState::Incomplete(4), //SET_ROW
-                        4 => self.state = RocketState::Incomplete(1), //PAUSE
-                        5 => self.state = RocketState::Complete, //SAVE_TRACKS
-                        _ => self.state = RocketState::Complete, // Error / Unknown
+                        1 => self.state = RocketState::Incomplete(4 + 4),         //DELETE_KEY
+                        3 => self.state = RocketState::Incomplete(4),             //SET_ROW
+                        4 => self.state = RocketState::Incomplete(1),             //PAUSE
+                        5 => self.state = RocketState::Complete,                  //SAVE_TRACKS
+                        _ => self.state = RocketState::Complete,                  // Error / Unknown
                     }
                     ReceiveResult::Incomplete
                 } else {
@@ -188,7 +209,7 @@ impl Rocket {
                 }
             }
             RocketState::Incomplete(bytes) => {
-                let mut buf = vec![0;bytes];
+                let mut buf = vec![0; bytes];
                 if let Ok(bytes_read) = self.stream.read(&mut buf) {
                     self.cmd.extend_from_slice(&buf);
                     if bytes - bytes_read > 0 {
@@ -208,19 +229,18 @@ impl Rocket {
                     let cmd = cursor.read_u8().unwrap();
                     match cmd {
                         0 => {
-                            let mut track = &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as
-                                                 usize];
+                            let mut track =
+                                &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             let value = cursor.read_f32::<BigEndian>().unwrap();
                             let interpolation = Interpolation::from(cursor.read_u8().unwrap());
                             let key = Key::new(row, value, interpolation);
 
                             track.set_key(key);
-
                         }
                         1 => {
-                            let mut track = &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as
-                                                 usize];
+                            let mut track =
+                                &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
 
                             track.delete_key(row);
@@ -252,9 +272,13 @@ impl Rocket {
         let client_greeting = "hello, synctracker!";
         let server_greeting = "hello, demo!";
 
-        self.stream.write_all(client_greeting.as_bytes()).expect("Failed to write client greeting");
+        self.stream
+            .write_all(client_greeting.as_bytes())
+            .expect("Failed to write client greeting");
         let mut buf = [0; 12];
-        self.stream.read_exact(&mut buf).expect("Failed to read server greeting");
+        self.stream
+            .read_exact(&mut buf)
+            .expect("Failed to read server greeting");
         let read_greeting = std::str::from_utf8(&buf).expect("Failed to convert buf to utf8");
         if read_greeting == server_greeting {
             Ok(())
