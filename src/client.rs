@@ -89,7 +89,7 @@ impl Rocket {
     /// # }
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Rocket, RocketErr> {
-        let stream = TcpStream::connect((host, port)).expect("Failed to connect");
+        let stream = TcpStream::connect((host, port)).map_err(|_| RocketErr{})?;
 
         let mut rocket = Rocket {
             stream: stream,
@@ -98,12 +98,12 @@ impl Rocket {
             tracks: Vec::new(),
         };
 
-        rocket.handshake().expect("Failed to handshake");
+        rocket.handshake()?;
 
         rocket
             .stream
             .set_nonblocking(true)
-            .expect("Failed to set nonblocking mode");
+            .map_err(|_| RocketErr{})?;
 
         Ok(rocket)
     }
