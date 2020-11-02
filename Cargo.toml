@@ -1,12 +1,13 @@
 [package]
 name = "rust-rocket"
 version = "0.3.5"
-authors = ["Tim Peters <mail@darksecond.nl>"]
+authors = ["Tim Peters <mail@darksecond.nl>", "Lauri Gustafsson <me@gustafla.space>"]
 license = "MIT"
 description = """
 A client implementation of GNU Rocket.
 """
 repository = "https://github.com/darksecond/rust-rocket"
+edition = "2018"
 
 [dependencies]
 byteorder = "1"
