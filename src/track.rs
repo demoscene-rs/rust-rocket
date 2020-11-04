@@ -1,6 +1,6 @@
 //! This module contains `Key` and `Track` types.
 
-use interpolation::*;
+use crate::interpolation::*;
 
 #[derive(Debug, Clone, Copy)]
 /// The `Key` Type.
@@ -14,8 +14,8 @@ impl Key {
     /// Construct a new `Key`.
     pub fn new(row: u32, value: f32, interp: Interpolation) -> Key {
         Key {
-            row: row,
-            value: value,
+            row,
+            value,
             interpolation: interp,
         }
     }
@@ -54,7 +54,8 @@ impl Track {
         self.keys
             .iter()
             .position(|k| k.row > row)
-            .unwrap_or(self.keys.len()) - 1
+            .unwrap_or(self.keys.len())
+            - 1
     }
 
     /// Insert or update a key on a track.

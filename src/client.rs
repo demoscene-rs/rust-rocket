@@ -1,11 +1,10 @@
 //! This module contains the main client code, including the `Rocket` type.
-use interpolation::*;
-use track::*;
+use crate::interpolation::*;
+use crate::track::*;
 
-use std;
-use std::io::Cursor;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::prelude::*;
+use std::io::Cursor;
 use std::net::TcpStream;
 
 #[derive(Copy, Clone, Debug)]
@@ -89,10 +88,10 @@ impl Rocket {
     /// # }
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Rocket, RocketErr> {
-        let stream = TcpStream::connect((host, port)).map_err(|_| RocketErr{})?;
+        let stream = TcpStream::connect((host, port)).map_err(|_| RocketErr {})?;
 
         let mut rocket = Rocket {
-            stream: stream,
+            stream,
             state: RocketState::New,
             cmd: Vec::new(),
             tracks: Vec::new(),
@@ -103,7 +102,7 @@ impl Rocket {
         rocket
             .stream
             .set_nonblocking(true)
-            .map_err(|_| RocketErr{})?;
+            .map_err(|_| RocketErr {})?;
 
         Ok(rocket)
     }
@@ -229,7 +228,7 @@ impl Rocket {
                     let cmd = cursor.read_u8().unwrap();
                     match cmd {
                         0 => {
-                            let mut track =
+                            let track =
                                 &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             let value = cursor.read_f32::<BigEndian>().unwrap();
@@ -239,7 +238,7 @@ impl Rocket {
                             track.set_key(key);
                         }
                         1 => {
-                            let mut track =
+                            let track =
                                 &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
 
