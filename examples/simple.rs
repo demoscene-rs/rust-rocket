@@ -1,7 +1,4 @@
-extern crate rust_rocket;
-
 use rust_rocket::{Event, Rocket};
-
 use std::time::Duration;
 
 fn main() {
