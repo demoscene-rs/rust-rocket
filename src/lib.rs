@@ -5,4 +5,4 @@ pub mod client;
 pub mod interpolation;
 pub mod track;
 
-pub use client::{Event, Rocket, Error};
+pub use client::{Error, Event, Rocket};

@@ -68,10 +68,7 @@ impl Rocket {
     ///
     /// ```rust,no_run
     /// use rust_rocket::Rocket;
-    ///
-    /// # fn main() {
     /// let mut rocket = Rocket::new();
-    /// # }
     /// ```
     pub fn new() -> Result<Rocket, Error> {
         Rocket::connect("localhost", 1338)
@@ -90,13 +87,10 @@ impl Rocket {
     ///
     /// ```rust,no_run
     /// use rust_rocket::Rocket;
-    ///
-    /// # fn main() {
     /// let mut rocket = Rocket::connect("localhost", 1338);
-    /// # }
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Rocket, Error> {
-        let stream = TcpStream::connect((host, port)).map_err(|e| Error::Connect(e))?;
+        let stream = TcpStream::connect((host, port)).map_err(Error::Connect)?;
 
         let mut rocket = Rocket {
             stream,
@@ -110,7 +104,7 @@ impl Rocket {
         rocket
             .stream
             .set_nonblocking(true)
-            .map_err(|e| Error::SetNonblocking(e))?;
+            .map_err(Error::SetNonblocking)?;
 
         Ok(rocket)
     }
@@ -123,11 +117,9 @@ impl Rocket {
     ///
     /// ```rust,no_run
     /// # use rust_rocket::Rocket;
-    /// # fn main() {
     /// # let mut rocket = Rocket::new().unwrap();
     /// let track = rocket.get_track_mut("namespace:track");
     /// track.get_value(3.5);
-    /// # }
     /// ```
     pub fn get_track_mut(&mut self, name: &str) -> &mut Track {
         if let Some((i, _)) = self
@@ -177,7 +169,6 @@ impl Rocket {
     ///
     /// ```rust,no_run
     /// # use rust_rocket::Rocket;
-    /// # fn main() {
     /// # let mut rocket = Rocket::new().unwrap();
     /// while let Some(event) = rocket.poll_events() {
     ///     match event {
@@ -185,7 +176,6 @@ impl Rocket {
     ///         _ => (),
     ///     }
     /// }
-    /// # }
     /// ```
     pub fn poll_events(&mut self) -> Option<Event> {
         loop {
@@ -283,12 +273,10 @@ impl Rocket {
 
         self.stream
             .write_all(client_greeting)
-            .map_err(|e| Error::Handshake(e))?;
+            .map_err(Error::Handshake)?;
 
         let mut buf = [0; 12];
-        self.stream
-            .read_exact(&mut buf)
-            .map_err(|e| Error::Handshake(e))?;
+        self.stream.read_exact(&mut buf).map_err(Error::Handshake)?;
 
         if &buf == server_greeting {
             Ok(())
