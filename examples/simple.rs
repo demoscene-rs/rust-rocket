@@ -1,8 +1,8 @@
 use rust_rocket::{Event, Rocket};
 use std::time::Duration;
 
-fn main() {
-    let mut rocket = Rocket::new().unwrap();
+fn main() -> Result<(), rust_rocket::Error> {
+    let mut rocket = Rocket::new()?;
     rocket.get_track_mut("test");
     rocket.get_track_mut("test2");
     rocket.get_track_mut("a:test2");

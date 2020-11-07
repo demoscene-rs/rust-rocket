@@ -11,10 +11,14 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 /// The `Error` Type. This is the main error type.
 pub enum Error {
-    #[error("Rocket encountered a network IO error")]
-    Connection(#[from] std::io::Error),
+    #[error("Failed to establish a TCP connection with the Rocket server")]
+    Connect(#[source] std::io::Error),
     #[error("Handshake with the Rocket server failed")]
-    Handshake,
+    Handshake(#[source] std::io::Error),
+    #[error("The Rocket server greeting {0:?} wasn't correct (check your address and port)")]
+    HandshakeGreetingMismatch([u8; 12]),
+    #[error("Cannot set Rocket's TCP connection to nonblocking mode")]
+    SetNonblocking(#[source] std::io::Error),
 }
 
 #[derive(Debug)]
@@ -92,7 +96,7 @@ impl Rocket {
     /// # }
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Rocket, Error> {
-        let stream = TcpStream::connect((host, port))?;
+        let stream = TcpStream::connect((host, port)).map_err(|e| Error::Connect(e))?;
 
         let mut rocket = Rocket {
             stream,
@@ -103,7 +107,10 @@ impl Rocket {
 
         rocket.handshake()?;
 
-        rocket.stream.set_nonblocking(true)?;
+        rocket
+            .stream
+            .set_nonblocking(true)
+            .map_err(|e| Error::SetNonblocking(e))?;
 
         Ok(rocket)
     }
@@ -276,17 +283,17 @@ impl Rocket {
 
         self.stream
             .write_all(client_greeting)
-            .map_err(|_| Error::Handshake)?;
+            .map_err(|e| Error::Handshake(e))?;
 
         let mut buf = [0; 12];
         self.stream
             .read_exact(&mut buf)
-            .map_err(|_| Error::Handshake)?;
+            .map_err(|e| Error::Handshake(e))?;
 
         if &buf == server_greeting {
             Ok(())
         } else {
-            Err(Error::Handshake)
+            Err(Error::HandshakeGreetingMismatch(buf))
         }
     }
 }
