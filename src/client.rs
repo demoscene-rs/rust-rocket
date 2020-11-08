@@ -1,16 +1,25 @@
 //! This module contains the main client code, including the `Rocket` type.
-use interpolation::*;
-use track::*;
+use crate::interpolation::*;
+use crate::track::*;
 
-use std;
-use std::io::Cursor;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::prelude::*;
+use std::io::Cursor;
 use std::net::TcpStream;
+use thiserror::Error;
 
-#[derive(Copy, Clone, Debug)]
-/// The `RocketErr` Type. This is the main error type.
-pub struct RocketErr {}
+#[derive(Debug, Error)]
+/// The `Error` Type. This is the main error type.
+pub enum Error {
+    #[error("Failed to establish a TCP connection with the Rocket server")]
+    Connect(#[source] std::io::Error),
+    #[error("Handshake with the Rocket server failed")]
+    Handshake(#[source] std::io::Error),
+    #[error("The Rocket server greeting {0:?} wasn't correct (check your address and port)")]
+    HandshakeGreetingMismatch([u8; 12]),
+    #[error("Cannot set Rocket's TCP connection to nonblocking mode")]
+    SetNonblocking(#[source] std::io::Error),
+}
 
 #[derive(Debug)]
 enum RocketState {
@@ -53,19 +62,15 @@ impl Rocket {
     /// # Errors
     ///
     /// If a connection cannot be established, or if the handshake fails.
-    /// This will raise a `RocketErr`.
+    /// This will raise an `Error`.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # extern crate rust_rocket;
     /// use rust_rocket::Rocket;
-    ///
-    /// # fn main() {
     /// let mut rocket = Rocket::new();
-    /// # }
     /// ```
-    pub fn new() -> Result<Rocket, RocketErr> {
+    pub fn new() -> Result<Rocket, Error> {
         Rocket::connect("localhost", 1338)
     }
 
@@ -76,23 +81,19 @@ impl Rocket {
     /// # Errors
     ///
     /// If a connection cannot be established, or if the handshake fails.
-    /// This will raise a `RocketErr`.
+    /// This will raise an `Error`.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # extern crate rust_rocket;
     /// use rust_rocket::Rocket;
-    ///
-    /// # fn main() {
     /// let mut rocket = Rocket::connect("localhost", 1338);
-    /// # }
     /// ```
-    pub fn connect(host: &str, port: u16) -> Result<Rocket, RocketErr> {
-        let stream = TcpStream::connect((host, port)).map_err(|_| RocketErr{})?;
+    pub fn connect(host: &str, port: u16) -> Result<Rocket, Error> {
+        let stream = TcpStream::connect((host, port)).map_err(Error::Connect)?;
 
         let mut rocket = Rocket {
-            stream: stream,
+            stream,
             state: RocketState::New,
             cmd: Vec::new(),
             tracks: Vec::new(),
@@ -103,7 +104,7 @@ impl Rocket {
         rocket
             .stream
             .set_nonblocking(true)
-            .map_err(|_| RocketErr{})?;
+            .map_err(Error::SetNonblocking)?;
 
         Ok(rocket)
     }
@@ -115,16 +116,20 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # extern crate rust_rocket;
     /// # use rust_rocket::Rocket;
-    /// # fn main() {
     /// # let mut rocket = Rocket::new().unwrap();
     /// let track = rocket.get_track_mut("namespace:track");
     /// track.get_value(3.5);
-    /// # }
     /// ```
     pub fn get_track_mut(&mut self, name: &str) -> &mut Track {
-        if !self.tracks.iter().any(|t| t.get_name() == name) {
+        if let Some((i, _)) = self
+            .tracks
+            .iter()
+            .enumerate()
+            .find(|(_, t)| t.get_name() == name)
+        {
+            &mut self.tracks[i]
+        } else {
             // Send GET_TRACK message
             let mut buf = vec![2];
             buf.write_u32::<BigEndian>(name.len() as u32).unwrap();
@@ -132,11 +137,8 @@ impl Rocket {
             self.stream.write_all(&buf).unwrap();
 
             self.tracks.push(Track::new(name));
+            self.tracks.last_mut().unwrap()
         }
-        self.tracks
-            .iter_mut()
-            .find(|t| t.get_name() == name)
-            .unwrap()
     }
 
     /// Get Track by name.
@@ -166,9 +168,7 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # extern crate rust_rocket;
     /// # use rust_rocket::Rocket;
-    /// # fn main() {
     /// # let mut rocket = Rocket::new().unwrap();
     /// while let Some(event) = rocket.poll_events() {
     ///     match event {
@@ -176,7 +176,6 @@ impl Rocket {
     ///         _ => (),
     ///     }
     /// }
-    /// # }
     /// ```
     pub fn poll_events(&mut self) -> Option<Event> {
         loop {
@@ -229,7 +228,7 @@ impl Rocket {
                     let cmd = cursor.read_u8().unwrap();
                     match cmd {
                         0 => {
-                            let mut track =
+                            let track =
                                 &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             let value = cursor.read_f32::<BigEndian>().unwrap();
@@ -239,7 +238,7 @@ impl Rocket {
                             track.set_key(key);
                         }
                         1 => {
-                            let mut track =
+                            let track =
                                 &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
 
@@ -268,22 +267,21 @@ impl Rocket {
         }
     }
 
-    fn handshake(&mut self) -> Result<(), RocketErr> {
-        let client_greeting = "hello, synctracker!";
-        let server_greeting = "hello, demo!";
+    fn handshake(&mut self) -> Result<(), Error> {
+        let client_greeting = b"hello, synctracker!";
+        let server_greeting = b"hello, demo!";
 
         self.stream
-            .write_all(client_greeting.as_bytes())
-            .expect("Failed to write client greeting");
+            .write_all(client_greeting)
+            .map_err(Error::Handshake)?;
+
         let mut buf = [0; 12];
-        self.stream
-            .read_exact(&mut buf)
-            .expect("Failed to read server greeting");
-        let read_greeting = std::str::from_utf8(&buf).expect("Failed to convert buf to utf8");
-        if read_greeting == server_greeting {
+        self.stream.read_exact(&mut buf).map_err(Error::Handshake)?;
+
+        if &buf == server_greeting {
             Ok(())
         } else {
-            Err(RocketErr {})
+            Err(Error::HandshakeGreetingMismatch(buf))
         }
     }
 }
