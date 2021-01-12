@@ -21,6 +21,10 @@ pub enum Error {
     SetNonblocking(#[source] std::io::Error),
     #[error("Rocket server disconnected")]
     IOError(#[from] std::io::Error),
+    #[error("Failed to save tracks")]
+    SerializeTracks(#[source] bincode::Error),
+    #[error("Failed to open tracks for writing")]
+    SaveTracks(#[source] std::io::Error),
 }
 
 #[derive(Debug)]
@@ -276,6 +280,7 @@ impl Rocket {
                         }
                         5 => {
                             result = ReceiveResult::Some(Event::SaveTracks);
+                            self.save_tracks()?;
                         }
                         _ => println!("Unknown {:?}", cmd),
                     }
@@ -305,5 +310,16 @@ impl Rocket {
         } else {
             Err(Error::HandshakeGreetingMismatch(buf))
         }
+    }
+
+    fn save_tracks(&self) -> Result<(), Error> {
+        use std::fs::OpenOptions;
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open("tracks.bin")
+            .map_err(Error::SaveTracks)?;
+        bincode::serialize_into(file, &self.tracks).map_err(Error::SerializeTracks)
     }
 }

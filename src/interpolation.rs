@@ -1,6 +1,8 @@
 //! This module contains anything related to interpolation.
 
-#[derive(Debug, Copy, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 /// The `Interpolation` Type.
 /// This represents the various forms of interpolation that can be performed.
 pub enum Interpolation {
