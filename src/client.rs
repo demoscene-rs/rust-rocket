@@ -9,6 +9,14 @@ use std::net::TcpStream;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+pub enum SaveTracksError {
+    #[error("Failed to open tracks for writing")]
+    OpenFile(#[from] std::io::Error),
+    #[error("Failed to serialize tracks into file")]
+    SerializeTracks(#[from] bincode::Error),
+}
+
+#[derive(Debug, Error)]
 /// The `Error` Type. This is the main error type.
 pub enum Error {
     #[error("Failed to establish a TCP connection with the Rocket server")]
@@ -22,9 +30,7 @@ pub enum Error {
     #[error("Rocket server disconnected")]
     IOError(#[from] std::io::Error),
     #[error("Failed to save tracks")]
-    SerializeTracks(#[source] bincode::Error),
-    #[error("Failed to open tracks for writing")]
-    SaveTracks(#[source] std::io::Error),
+    SaveTracks(#[source] SaveTracksError),
 }
 
 #[derive(Debug)]
@@ -179,9 +185,13 @@ impl Rocket {
     /// It is recommended to keep calling this as long as your receive
     /// Some(Event).
     ///
+    /// Tracks will be automatically saved to a playable binary format when the editor requests
+    /// that.
+    ///
     /// # Errors
     ///
-    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
+    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects,
+    /// or an [Error::SaveTracks] if the server asks to export tracks but doing so fails.
     ///
     /// # Examples
     ///
@@ -280,7 +290,7 @@ impl Rocket {
                         }
                         5 => {
                             result = ReceiveResult::Some(Event::SaveTracks);
-                            self.save_tracks()?;
+                            self.save_tracks().map_err(Error::SaveTracks)?;
                         }
                         _ => println!("Unknown {:?}", cmd),
                     }
@@ -312,14 +322,13 @@ impl Rocket {
         }
     }
 
-    fn save_tracks(&self) -> Result<(), Error> {
+    fn save_tracks(&self) -> Result<(), SaveTracksError> {
         use std::fs::OpenOptions;
         let file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
-            .open("tracks.bin")
-            .map_err(Error::SaveTracks)?;
-        bincode::serialize_into(file, &self.tracks).map_err(Error::SerializeTracks)
+            .open("tracks.bin")?;
+        bincode::serialize_into(file, &self.tracks).map_err(|e| e.into())
     }
 }
