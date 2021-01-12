@@ -19,6 +19,8 @@ pub enum Error {
     HandshakeGreetingMismatch([u8; 12]),
     #[error("Cannot set Rocket's TCP connection to nonblocking mode")]
     SetNonblocking(#[source] std::io::Error),
+    #[error("Rocket server disconnected")]
+    IOError(#[from] std::io::Error),
 }
 
 #[derive(Debug)]
@@ -67,8 +69,8 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use rust_rocket::Rocket;
-    /// let mut rocket = Rocket::new();
+    /// # use rust_rocket::Rocket;
+    /// let mut rocket = Rocket::new().unwrap();
     /// ```
     pub fn new() -> Result<Rocket, Error> {
         Rocket::connect("localhost", 1338)
@@ -86,8 +88,8 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use rust_rocket::Rocket;
-    /// let mut rocket = Rocket::connect("localhost", 1338);
+    /// # use rust_rocket::Rocket;
+    /// let mut rocket = Rocket::connect("localhost", 1338).unwrap();
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Rocket, Error> {
         let stream = TcpStream::connect((host, port)).map_err(Error::Connect)?;
@@ -113,31 +115,35 @@ impl Rocket {
     ///
     /// If the track does not yet exist it will be created.
     ///
+    /// # Errors
+    ///
+    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use rust_rocket::Rocket;
     /// # let mut rocket = Rocket::new().unwrap();
-    /// let track = rocket.get_track_mut("namespace:track");
+    /// let track = rocket.get_track_mut("namespace:track").unwrap();
     /// track.get_value(3.5);
     /// ```
-    pub fn get_track_mut(&mut self, name: &str) -> &mut Track {
+    pub fn get_track_mut(&mut self, name: &str) -> Result<&mut Track, Error> {
         if let Some((i, _)) = self
             .tracks
             .iter()
             .enumerate()
             .find(|(_, t)| t.get_name() == name)
         {
-            &mut self.tracks[i]
+            Ok(&mut self.tracks[i])
         } else {
             // Send GET_TRACK message
             let mut buf = vec![2];
             buf.write_u32::<BigEndian>(name.len() as u32).unwrap();
             buf.extend_from_slice(&name.as_bytes());
-            self.stream.write_all(&buf).unwrap();
+            self.stream.write_all(&buf)?;
 
             self.tracks.push(Track::new(name));
-            self.tracks.last_mut().unwrap()
+            Ok(self.tracks.last_mut().unwrap())
         }
     }
 
@@ -151,11 +157,15 @@ impl Rocket {
     /// Send a SetRow message.
     ///
     /// This changes the current row on the tracker side.
-    pub fn set_row(&mut self, row: u32) {
+    ///
+    /// # Errors
+    ///
+    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
+    pub fn set_row(&mut self, row: u32) -> Result<(), Error> {
         // Send SET_ROW message
         let mut buf = vec![3];
         buf.write_u32::<BigEndian>(row).unwrap();
-        self.stream.write_all(&buf).unwrap();
+        self.stream.write_all(&buf).map_err(|e| e.into())
     }
 
     /// Poll for new events from the tracker.
@@ -165,60 +175,72 @@ impl Rocket {
     /// It is recommended to keep calling this as long as your receive
     /// Some(Event).
     ///
+    /// # Errors
+    ///
+    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use rust_rocket::Rocket;
     /// # let mut rocket = Rocket::new().unwrap();
-    /// while let Some(event) = rocket.poll_events() {
+    /// while let Some(event) = rocket.poll_events().unwrap() {
     ///     match event {
     ///         // Do something with the various events.
     ///         _ => (),
     ///     }
     /// }
     /// ```
-    pub fn poll_events(&mut self) -> Option<Event> {
+    pub fn poll_events(&mut self) -> Result<Option<Event>, Error> {
         loop {
-            let result = self.poll_event();
+            let result = self.poll_event()?;
             match result {
-                ReceiveResult::None => return None,
+                ReceiveResult::None => return Ok(None),
                 ReceiveResult::Incomplete => (),
-                ReceiveResult::Some(event) => return Some(event),
+                ReceiveResult::Some(event) => return Ok(Some(event)),
             }
         }
     }
 
-    fn poll_event(&mut self) -> ReceiveResult {
+    fn poll_event(&mut self) -> Result<ReceiveResult, Error> {
         match self.state {
             RocketState::New => {
                 let mut buf = [0; 1];
-                if self.stream.read_exact(&mut buf).is_ok() {
-                    self.cmd.extend_from_slice(&buf);
-                    match self.cmd[0] {
-                        0 => self.state = RocketState::Incomplete(4 + 4 + 4 + 1), //SET_KEY
-                        1 => self.state = RocketState::Incomplete(4 + 4),         //DELETE_KEY
-                        3 => self.state = RocketState::Incomplete(4),             //SET_ROW
-                        4 => self.state = RocketState::Incomplete(1),             //PAUSE
-                        5 => self.state = RocketState::Complete,                  //SAVE_TRACKS
-                        _ => self.state = RocketState::Complete,                  // Error / Unknown
+                match self.stream.read_exact(&mut buf) {
+                    Ok(()) => {
+                        self.cmd.extend_from_slice(&buf);
+                        match self.cmd[0] {
+                            0 => self.state = RocketState::Incomplete(4 + 4 + 4 + 1), //SET_KEY
+                            1 => self.state = RocketState::Incomplete(4 + 4),         //DELETE_KEY
+                            3 => self.state = RocketState::Incomplete(4),             //SET_ROW
+                            4 => self.state = RocketState::Incomplete(1),             //PAUSE
+                            5 => self.state = RocketState::Complete,                  //SAVE_TRACKS
+                            _ => self.state = RocketState::Complete, // Error / Unknown
+                        }
+                        Ok(ReceiveResult::Incomplete)
                     }
-                    ReceiveResult::Incomplete
-                } else {
-                    ReceiveResult::None
+                    Err(e) => match e.kind() {
+                        std::io::ErrorKind::WouldBlock => Ok(ReceiveResult::None),
+                        _ => Err(e.into()),
+                    },
                 }
             }
             RocketState::Incomplete(bytes) => {
                 let mut buf = vec![0; bytes];
-                if let Ok(bytes_read) = self.stream.read(&mut buf) {
-                    self.cmd.extend_from_slice(&buf);
-                    if bytes - bytes_read > 0 {
-                        self.state = RocketState::Incomplete(bytes - bytes_read);
-                    } else {
-                        self.state = RocketState::Complete;
+                match self.stream.read(&mut buf) {
+                    Ok(bytes_read) => {
+                        self.cmd.extend_from_slice(&buf);
+                        if bytes - bytes_read > 0 {
+                            self.state = RocketState::Incomplete(bytes - bytes_read);
+                        } else {
+                            self.state = RocketState::Complete;
+                        }
+                        Ok(ReceiveResult::Incomplete)
                     }
-                    ReceiveResult::Incomplete
-                } else {
-                    ReceiveResult::None
+                    Err(e) => match e.kind() {
+                        std::io::ErrorKind::WouldBlock => Ok(ReceiveResult::None),
+                        _ => Err(e.into()),
+                    },
                 }
             }
             RocketState::Complete => {
@@ -262,7 +284,7 @@ impl Rocket {
                 self.cmd.clear();
                 self.state = RocketState::New;
 
-                result
+                Ok(result)
             }
         }
     }
