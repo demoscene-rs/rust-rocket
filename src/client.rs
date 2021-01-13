@@ -6,15 +6,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::prelude::*;
 use std::io::Cursor;
 use std::net::TcpStream;
+use std::path::Path;
 use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum SaveTracksError {
-    #[error("Failed to open tracks for writing")]
-    OpenFile(#[from] std::io::Error),
-    #[error("Failed to serialize tracks into file")]
-    SerializeTracks(#[from] bincode::Error),
-}
 
 #[derive(Debug, Error)]
 /// The `Error` Type. This is the main error type.
@@ -28,9 +21,11 @@ pub enum Error {
     #[error("Cannot set Rocket's TCP connection to nonblocking mode")]
     SetNonblocking(#[source] std::io::Error),
     #[error("Rocket server disconnected")]
-    IOError(#[from] std::io::Error),
-    #[error("Failed to save tracks")]
-    SaveTracks(#[source] SaveTracksError),
+    IOError(#[source] std::io::Error),
+    #[error("Failed to open file for writing track data")]
+    OpenTrackFile(#[source] std::io::Error),
+    #[error("Failed to serialize tracks")]
+    SerializeTracks(#[source] bincode::Error),
 }
 
 #[derive(Debug)]
@@ -150,7 +145,7 @@ impl Rocket {
             let mut buf = vec![2];
             buf.write_u32::<BigEndian>(name.len() as u32).unwrap();
             buf.extend_from_slice(&name.as_bytes());
-            self.stream.write_all(&buf)?;
+            self.stream.write_all(&buf).map_err(Error::IOError)?;
 
             self.tracks.push(Track::new(name));
             Ok(self.tracks.last_mut().unwrap())
@@ -164,6 +159,18 @@ impl Rocket {
         self.tracks.iter().find(|t| t.get_name() == name)
     }
 
+    /// Save tracks to a playable file, overwriting previous track data.
+    pub fn save_tracks(&self, path: impl AsRef<Path>) -> Result<(), Error> {
+        use std::fs::OpenOptions;
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .map_err(Error::OpenTrackFile)?;
+        bincode::serialize_into(file, &self.tracks).map_err(Error::SerializeTracks)
+    }
+
     /// Send a SetRow message.
     ///
     /// This changes the current row on the tracker side.
@@ -175,7 +182,7 @@ impl Rocket {
         // Send SET_ROW message
         let mut buf = vec![3];
         buf.write_u32::<BigEndian>(row).unwrap();
-        self.stream.write_all(&buf).map_err(|e| e.into())
+        self.stream.write_all(&buf).map_err(Error::IOError)
     }
 
     /// Poll for new events from the tracker.
@@ -185,13 +192,9 @@ impl Rocket {
     /// It is recommended to keep calling this as long as your receive
     /// Some(Event).
     ///
-    /// Tracks will be automatically saved to a playable binary format when the editor requests
-    /// that.
-    ///
     /// # Errors
     ///
-    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects,
-    /// or an [Error::SaveTracks] if the server asks to export tracks but doing so fails.
+    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
     ///
     /// # Examples
     ///
@@ -235,7 +238,7 @@ impl Rocket {
                     }
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::WouldBlock => Ok(ReceiveResult::None),
-                        _ => Err(e.into()),
+                        _ => Err(Error::IOError(e)),
                     },
                 }
             }
@@ -253,7 +256,7 @@ impl Rocket {
                     }
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::WouldBlock => Ok(ReceiveResult::None),
-                        _ => Err(e.into()),
+                        _ => Err(Error::IOError(e)),
                     },
                 }
             }
@@ -290,7 +293,6 @@ impl Rocket {
                         }
                         5 => {
                             result = ReceiveResult::Some(Event::SaveTracks);
-                            self.save_tracks().map_err(Error::SaveTracks)?;
                         }
                         _ => println!("Unknown {:?}", cmd),
                     }
@@ -320,15 +322,5 @@ impl Rocket {
         } else {
             Err(Error::HandshakeGreetingMismatch(buf))
         }
-    }
-
-    fn save_tracks(&self) -> Result<(), SaveTracksError> {
-        use std::fs::OpenOptions;
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open("tracks.bin")?;
-        bincode::serialize_into(file, &self.tracks).map_err(|e| e.into())
     }
 }
