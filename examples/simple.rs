@@ -8,6 +8,8 @@ fn main() -> Result<(), rust_rocket::Error> {
     rocket.get_track_mut("a:test2")?;
 
     let mut current_row = 0;
+    let mut paused = true;
+
     loop {
         if let Some(event) = rocket.poll_events()? {
             match event {
@@ -15,7 +17,9 @@ fn main() -> Result<(), rust_rocket::Error> {
                     println!("SetRow (row: {:?})", row);
                     current_row = row;
                 }
-                Event::Pause(_) => {
+                Event::Pause(state) => {
+                    paused = state;
+
                     let track1 = rocket.get_track("test").unwrap();
                     println!(
                         "Pause (value: {:?}) (row: {:?})",
@@ -23,10 +27,19 @@ fn main() -> Result<(), rust_rocket::Error> {
                         current_row
                     );
                 }
-                _ => (),
+                Event::SaveTracks => {
+                    println!("Saving tracks");
+                    rocket.save_tracks("tracks.bin")?;
+                }
             }
             println!("{:?}", event);
         }
-        std::thread::sleep(Duration::from_millis(16));
+
+        if !paused {
+            current_row += 1;
+            rocket.set_row(current_row)?;
+        }
+
+        std::thread::sleep(Duration::from_millis(32));
     }
 }
