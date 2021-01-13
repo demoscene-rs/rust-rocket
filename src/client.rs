@@ -1,6 +1,7 @@
 //! This module contains the main client code, including the `Rocket` type.
 use crate::interpolation::*;
 use crate::track::*;
+use crate::Rocket;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::prelude::*;
@@ -29,7 +30,7 @@ pub enum Error {
 }
 
 #[derive(Debug)]
-enum RocketState {
+enum ClientState {
     New,
     Incomplete(usize),
     Complete,
@@ -43,6 +44,7 @@ pub enum Event {
     /// The tracker pauses or unpauses.
     Pause(bool),
     /// The tracker asks us to save our track data.
+    /// You may want to call [Client::save_tracks] after receiving this event.
     SaveTracks,
 }
 
@@ -54,14 +56,23 @@ enum ReceiveResult {
 
 #[derive(Debug)]
 /// The `Rocket` type. This contains the connected socket and other fields.
-pub struct Rocket {
+pub struct Client {
     stream: TcpStream,
-    state: RocketState,
+    state: ClientState,
     cmd: Vec<u8>,
     tracks: Vec<Track>,
 }
 
-impl Rocket {
+impl Rocket for Client {
+    /// Get Track by name.
+    ///
+    /// You should use `get_track_mut` to create a track.
+    fn get_track(&self, name: &str) -> Option<&Track> {
+        self.tracks.iter().find(|t| t.get_name() == name)
+    }
+}
+
+impl Client {
     /// Construct a new Rocket.
     ///
     /// This constructs a new rocket and connect to localhost on port 1338.
@@ -74,11 +85,11 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Rocket;
-    /// let mut rocket = Rocket::new().unwrap();
+    /// # use rust_rocket::Client;
+    /// let mut rocket = Client::new().unwrap();
     /// ```
-    pub fn new() -> Result<Rocket, Error> {
-        Rocket::connect("localhost", 1338)
+    pub fn new() -> Result<Self, Error> {
+        Self::connect("localhost", 1338)
     }
 
     /// Construct a new Rocket.
@@ -93,15 +104,15 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Rocket;
-    /// let mut rocket = Rocket::connect("localhost", 1338).unwrap();
+    /// # use rust_rocket::Client;
+    /// let mut rocket = Client::connect("localhost", 1338).unwrap();
     /// ```
-    pub fn connect(host: &str, port: u16) -> Result<Rocket, Error> {
+    pub fn connect(host: &str, port: u16) -> Result<Self, Error> {
         let stream = TcpStream::connect((host, port)).map_err(Error::Connect)?;
 
-        let mut rocket = Rocket {
+        let mut rocket = Self {
             stream,
-            state: RocketState::New,
+            state: ClientState::New,
             cmd: Vec::new(),
             tracks: Vec::new(),
         };
@@ -127,8 +138,8 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Rocket;
-    /// # let mut rocket = Rocket::new().unwrap();
+    /// # use rust_rocket::Client;
+    /// # let mut rocket = Client::new().unwrap();
     /// let track = rocket.get_track_mut("namespace:track").unwrap();
     /// track.get_value(3.5);
     /// ```
@@ -150,13 +161,6 @@ impl Rocket {
             self.tracks.push(Track::new(name));
             Ok(self.tracks.last_mut().unwrap())
         }
-    }
-
-    /// Get Track by name.
-    ///
-    /// You should use `get_track_mut` to create a track.
-    pub fn get_track(&self, name: &str) -> Option<&Track> {
-        self.tracks.iter().find(|t| t.get_name() == name)
     }
 
     /// Save tracks to a playable file, overwriting previous track data.
@@ -199,8 +203,8 @@ impl Rocket {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Rocket;
-    /// # let mut rocket = Rocket::new().unwrap();
+    /// # use rust_rocket::Client;
+    /// # let mut rocket = Client::new().unwrap();
     /// while let Some(event) = rocket.poll_events().unwrap() {
     ///     match event {
     ///         // Do something with the various events.
@@ -221,18 +225,18 @@ impl Rocket {
 
     fn poll_event(&mut self) -> Result<ReceiveResult, Error> {
         match self.state {
-            RocketState::New => {
+            ClientState::New => {
                 let mut buf = [0; 1];
                 match self.stream.read_exact(&mut buf) {
                     Ok(()) => {
                         self.cmd.extend_from_slice(&buf);
                         match self.cmd[0] {
-                            0 => self.state = RocketState::Incomplete(4 + 4 + 4 + 1), //SET_KEY
-                            1 => self.state = RocketState::Incomplete(4 + 4),         //DELETE_KEY
-                            3 => self.state = RocketState::Incomplete(4),             //SET_ROW
-                            4 => self.state = RocketState::Incomplete(1),             //PAUSE
-                            5 => self.state = RocketState::Complete,                  //SAVE_TRACKS
-                            _ => self.state = RocketState::Complete, // Error / Unknown
+                            0 => self.state = ClientState::Incomplete(4 + 4 + 4 + 1), //SET_KEY
+                            1 => self.state = ClientState::Incomplete(4 + 4),         //DELETE_KEY
+                            3 => self.state = ClientState::Incomplete(4),             //SET_ROW
+                            4 => self.state = ClientState::Incomplete(1),             //PAUSE
+                            5 => self.state = ClientState::Complete,                  //SAVE_TRACKS
+                            _ => self.state = ClientState::Complete, // Error / Unknown
                         }
                         Ok(ReceiveResult::Incomplete)
                     }
@@ -242,15 +246,15 @@ impl Rocket {
                     },
                 }
             }
-            RocketState::Incomplete(bytes) => {
+            ClientState::Incomplete(bytes) => {
                 let mut buf = vec![0; bytes];
                 match self.stream.read(&mut buf) {
                     Ok(bytes_read) => {
                         self.cmd.extend_from_slice(&buf);
                         if bytes - bytes_read > 0 {
-                            self.state = RocketState::Incomplete(bytes - bytes_read);
+                            self.state = ClientState::Incomplete(bytes - bytes_read);
                         } else {
-                            self.state = RocketState::Complete;
+                            self.state = ClientState::Complete;
                         }
                         Ok(ReceiveResult::Incomplete)
                     }
@@ -260,7 +264,7 @@ impl Rocket {
                     },
                 }
             }
-            RocketState::Complete => {
+            ClientState::Complete => {
                 let mut result = ReceiveResult::None;
                 {
                     let mut cursor = Cursor::new(&self.cmd);
@@ -299,7 +303,7 @@ impl Rocket {
                 }
 
                 self.cmd.clear();
-                self.state = RocketState::New;
+                self.state = ClientState::New;
 
                 Ok(result)
             }

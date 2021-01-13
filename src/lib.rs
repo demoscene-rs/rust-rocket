@@ -3,6 +3,10 @@
 
 pub mod client;
 pub mod interpolation;
+pub mod player;
+pub mod rocket;
 pub mod track;
 
-pub use client::{Error, Event, Rocket};
+pub use client::Client;
+pub use player::Player;
+pub use rocket::Rocket;

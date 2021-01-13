@@ -1,8 +1,11 @@
-use rust_rocket::{Event, Rocket};
+use rust_rocket::{
+    client::{Client, Event},
+    Rocket,
+};
 use std::time::Duration;
 
-fn main() -> Result<(), rust_rocket::Error> {
-    let mut rocket = Rocket::new()?;
+fn main() -> Result<(), rust_rocket::client::Error> {
+    let mut rocket = Client::new()?;
     rocket.get_track_mut("test")?;
     rocket.get_track_mut("test2")?;
     rocket.get_track_mut("a:test2")?;
