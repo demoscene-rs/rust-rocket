@@ -1,7 +1,6 @@
 //! This module contains the main client code, including the `Rocket` type.
 use crate::interpolation::*;
 use crate::track::*;
-use crate::Rocket;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::prelude::*;
@@ -61,15 +60,6 @@ pub struct Client {
     state: ClientState,
     cmd: Vec<u8>,
     tracks: Vec<Track>,
-}
-
-impl Rocket for Client {
-    /// Get Track by name.
-    ///
-    /// You should use `get_track_mut` to create a track.
-    fn get_track(&self, name: &str) -> Option<&Track> {
-        self.tracks.iter().find(|t| t.get_name() == name)
-    }
 }
 
 impl Client {
@@ -161,6 +151,13 @@ impl Client {
             self.tracks.push(Track::new(name));
             Ok(self.tracks.last_mut().unwrap())
         }
+    }
+
+    /// Get Track by name.
+    ///
+    /// You should use `get_track_mut` to create a track.
+    pub fn get_track(&self, name: &str) -> Option<&Track> {
+        self.tracks.iter().find(|t| t.get_name() == name)
     }
 
     /// Save tracks to a playable file, overwriting previous track data.

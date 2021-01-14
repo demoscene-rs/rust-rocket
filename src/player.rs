@@ -1,5 +1,4 @@
 use crate::track::Track;
-use crate::Rocket;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
@@ -17,13 +16,6 @@ pub struct Player {
     tracks: HashMap<String, Track>,
 }
 
-impl Rocket for Player {
-    /// Get Track by name.
-    fn get_track(&self, name: &str) -> Option<&Track> {
-        self.tracks.get(name)
-    }
-}
-
 impl Player {
     /// Load track data from file for playback.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, Error> {
@@ -39,5 +31,10 @@ impl Player {
         }
 
         Ok(Self { tracks: tracks_map })
+    }
+
+    /// Get Track by name.
+    pub fn get_track(&self, name: &str) -> Option<&Track> {
+        self.tracks.get(name)
     }
 }
