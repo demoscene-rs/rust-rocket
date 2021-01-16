@@ -17,7 +17,7 @@ pub enum Error {
 ///
 /// # Usage
 ///
-/// After constructing, call [`Player::get_track`] to get [`Track`]s.
+/// After constructing, call [`Player::get_track`] to get tracks.
 /// Then call [`Track::get_value`] to get saved values at any given point in time.
 pub struct Player {
     tracks: HashMap<String, Track>,
@@ -40,7 +40,7 @@ impl Player {
         Ok(Self { tracks: tracks_map })
     }
 
-    /// Get [`Track`] by name.
+    /// Get track by name.
     pub fn get_track(&self, name: &str) -> Option<&Track> {
         self.tracks.get(name)
     }

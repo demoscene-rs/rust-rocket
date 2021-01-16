@@ -13,18 +13,26 @@ use thiserror::Error;
 /// The `Error` Type. This is the main error type.
 pub enum Error {
     #[error("Failed to establish a TCP connection with the Rocket server")]
+    /// Failure to connect to a rocket tracker. This can happen if the tracker is not running, the
+    /// address isn't correct or other network-related reasons.
     Connect(#[source] std::io::Error),
     #[error("Handshake with the Rocket server failed")]
+    /// Failure to transmit or receive greetings with the tracker
     Handshake(#[source] std::io::Error),
     #[error("The Rocket server greeting {0:?} wasn't correct")]
+    /// Handshake was performed but the the received greeting wasn't correct
     HandshakeGreetingMismatch([u8; 12]),
     #[error("Cannot set Rocket's TCP connection to nonblocking mode")]
+    /// Error from [`TcpStream::set_nonblocking`]
     SetNonblocking(#[source] std::io::Error),
     #[error("Rocket server disconnected")]
+    /// Network IO error during operation
     IOError(#[source] std::io::Error),
     #[error("Failed to open file for writing track data")]
+    /// The requested track file cannot be written to
     OpenTrackFile(#[source] std::io::Error),
     #[error("Failed to serialize tracks")]
+    /// Tracks weren't able to be serialized into the requested track file
     SerializeTracks(#[source] bincode::Error),
 }
 
@@ -117,7 +125,7 @@ impl Client {
         Ok(rocket)
     }
 
-    /// Get [`Track`] by name.
+    /// Get track by name.
     ///
     /// If the track does not yet exist it will be created.
     ///
@@ -153,7 +161,7 @@ impl Client {
         }
     }
 
-    /// Get [`Track`] by name.
+    /// Get track by name.
     ///
     /// You should use [`Client::get_track_mut`] to create a track.
     pub fn get_track(&self, name: &str) -> Option<&Track> {
