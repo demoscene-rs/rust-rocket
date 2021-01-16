@@ -1,4 +1,4 @@
-//! This module contains the main client code, including the `Rocket` type.
+//! This module contains the main client code, including the [`Client`] type.
 use crate::interpolation::*;
 use crate::track::*;
 
@@ -16,7 +16,7 @@ pub enum Error {
     Connect(#[source] std::io::Error),
     #[error("Handshake with the Rocket server failed")]
     Handshake(#[source] std::io::Error),
-    #[error("The Rocket server greeting {0:?} wasn't correct (check your address and port)")]
+    #[error("The Rocket server greeting {0:?} wasn't correct")]
     HandshakeGreetingMismatch([u8; 12]),
     #[error("Cannot set Rocket's TCP connection to nonblocking mode")]
     SetNonblocking(#[source] std::io::Error),
@@ -43,7 +43,7 @@ pub enum Event {
     /// The tracker pauses or unpauses.
     Pause(bool),
     /// The tracker asks us to save our track data.
-    /// You may want to call [Client::save_tracks] after receiving this event.
+    /// You may want to call [`Client::save_tracks`] after receiving this event.
     SaveTracks,
 }
 
@@ -54,7 +54,7 @@ enum ReceiveResult {
 }
 
 #[derive(Debug)]
-/// The `Rocket` type. This contains the connected socket and other fields.
+/// The `Client` type. This contains the connected socket and other fields.
 pub struct Client {
     stream: TcpStream,
     state: ClientState,
@@ -63,14 +63,14 @@ pub struct Client {
 }
 
 impl Client {
-    /// Construct a new Rocket.
+    /// Construct a new Client.
     ///
-    /// This constructs a new rocket and connect to localhost on port 1338.
+    /// This constructs a new Rocket client and connect to localhost on port 1338.
     ///
     /// # Errors
     ///
-    /// If a connection cannot be established, or if the handshake fails.
-    /// This will raise an `Error`.
+    /// [`Error::Connect`] if connection cannot be established, or [`Error::Handshake`]
+    /// if the handshake fails.
     ///
     /// # Examples
     ///
@@ -82,14 +82,14 @@ impl Client {
         Self::connect("localhost", 1338)
     }
 
-    /// Construct a new Rocket.
+    /// Construct a new Client.
     ///
-    /// This constructs a new rocket and connects to a specified host and port.
+    /// This constructs a new Rocket client and connects to a specified host and port.
     ///
     /// # Errors
     ///
-    /// If a connection cannot be established, or if the handshake fails.
-    /// This will raise an `Error`.
+    /// [`Error::Connect`] if connection cannot be established, or [`Error::Handshake`]
+    /// if the handshake fails.
     ///
     /// # Examples
     ///
@@ -117,13 +117,13 @@ impl Client {
         Ok(rocket)
     }
 
-    /// Get a track by name.
+    /// Get [`Track`] by name.
     ///
     /// If the track does not yet exist it will be created.
     ///
     /// # Errors
     ///
-    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
+    /// This method can return an [`Error::IOError`] if Rocket tracker disconnects.
     ///
     /// # Examples
     ///
@@ -153,9 +153,9 @@ impl Client {
         }
     }
 
-    /// Get Track by name.
+    /// Get [`Track`] by name.
     ///
-    /// You should use `get_track_mut` to create a track.
+    /// You should use [`Client::get_track_mut`] to create a track.
     pub fn get_track(&self, name: &str) -> Option<&Track> {
         self.tracks.iter().find(|t| t.get_name() == name)
     }
@@ -178,7 +178,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
+    /// This method can return an [`Error::IOError`] if Rocket tracker disconnects.
     pub fn set_row(&mut self, row: u32) -> Result<(), Error> {
         // Send SET_ROW message
         let mut buf = vec![3];
@@ -190,12 +190,11 @@ impl Client {
     ///
     /// This polls from events from the tracker.
     /// You should call this fairly often your main loop.
-    /// It is recommended to keep calling this as long as your receive
-    /// Some(Event).
+    /// It is recommended to keep calling this as long as your receive `Some(Event)`.
     ///
     /// # Errors
     ///
-    /// This method can return an [IOError](Error::IOError) if Rocket server disconnects.
+    /// This method can return an [`Error::IOError`] if Rocket tracker disconnects.
     ///
     /// # Examples
     ///

@@ -1,7 +1,4 @@
-use rust_rocket::{
-    client::{Client, Event},
-    Rocket,
-};
+use rust_rocket::client::{Client, Event};
 use std::time::Duration;
 
 fn main() -> Result<(), rust_rocket::client::Error> {

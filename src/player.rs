@@ -1,3 +1,4 @@
+//! This module contains a barebones loader for track files.
 use crate::track::Track;
 use std::collections::HashMap;
 use std::fs::File;
@@ -12,6 +13,12 @@ pub enum Error {
     DeserializeTracks(#[source] bincode::Error),
 }
 
+/// A loader for track binary files dumped by [`Client::save_tracks`](crate::Client::save_tracks).
+///
+/// # Usage
+///
+/// After constructing, call [`Player::get_track`] to get [`Track`]s.
+/// Then call [`Track::get_value`] to get saved values at any given point in time.
 pub struct Player {
     tracks: HashMap<String, Track>,
 }
@@ -33,7 +40,7 @@ impl Player {
         Ok(Self { tracks: tracks_map })
     }
 
-    /// Get Track by name.
+    /// Get [`Track`] by name.
     pub fn get_track(&self, name: &str) -> Option<&Track> {
         self.tracks.get(name)
     }

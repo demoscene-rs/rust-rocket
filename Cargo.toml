@@ -1,6 +1,6 @@
 [package]
 name = "rust-rocket"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Tim Peters <mail@darksecond.nl>", "Lauri Gustafsson <me@gustafla.space>"]
 license = "MIT"
 description = """

@@ -1,4 +1,4 @@
-use rust_rocket::{Player, Rocket};
+use rust_rocket::Player;
 use std::time::Duration;
 
 fn main() -> Result<(), rust_rocket::player::Error> {
