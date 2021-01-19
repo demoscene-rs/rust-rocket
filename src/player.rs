@@ -43,3 +43,70 @@ impl RocketPlayer {
         self.tracks.get(name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interpolation::Interpolation;
+    use crate::track::Key;
+
+    fn get_test_tracks() -> Vec<Track> {
+        vec![
+            {
+                let mut track = Track::new("test1");
+                track.set_key(Key::new(0, 1.0, Interpolation::Step));
+                track.set_key(Key::new(5, 0.0, Interpolation::Step));
+                track.set_key(Key::new(10, 1.0, Interpolation::Step));
+                track
+            },
+            {
+                let mut track = Track::new("test2");
+                track.set_key(Key::new(0, 2.0, Interpolation::Step));
+                track.set_key(Key::new(5, 0.0, Interpolation::Step));
+                track.set_key(Key::new(10, 2.0, Interpolation::Step));
+                track
+            },
+        ]
+    }
+
+    #[test]
+    fn finds_all_tracks() {
+        let tracks = get_test_tracks();
+        let player = RocketPlayer::new(tracks);
+
+        // Ugly repeated calls to get_track to reflect average use case :)
+
+        assert_eq!(player.get_track("test1").unwrap().get_value(-1.), 1.0);
+        assert_eq!(player.get_track("test1").unwrap().get_value(0.), 1.0);
+        assert_eq!(player.get_track("test1").unwrap().get_value(1.), 1.0);
+
+        assert_eq!(player.get_track("test1").unwrap().get_value(4.), 1.0);
+        assert_eq!(player.get_track("test1").unwrap().get_value(5.), 0.0);
+        assert_eq!(player.get_track("test1").unwrap().get_value(6.), 0.0);
+
+        assert_eq!(player.get_track("test1").unwrap().get_value(9.), 0.0);
+        assert_eq!(player.get_track("test1").unwrap().get_value(10.), 1.0);
+        assert_eq!(player.get_track("test1").unwrap().get_value(11.), 1.0);
+
+        assert_eq!(player.get_track("test2").unwrap().get_value(-1.), 2.0);
+        assert_eq!(player.get_track("test2").unwrap().get_value(0.), 2.0);
+        assert_eq!(player.get_track("test2").unwrap().get_value(1.), 2.0);
+
+        assert_eq!(player.get_track("test2").unwrap().get_value(4.), 2.0);
+        assert_eq!(player.get_track("test2").unwrap().get_value(5.), 0.0);
+        assert_eq!(player.get_track("test2").unwrap().get_value(6.), 0.0);
+
+        assert_eq!(player.get_track("test2").unwrap().get_value(9.), 0.0);
+        assert_eq!(player.get_track("test2").unwrap().get_value(10.), 2.0);
+        assert_eq!(player.get_track("test2").unwrap().get_value(11.), 2.0);
+    }
+
+    #[test]
+    fn no_surprise_tracks() {
+        let tracks = get_test_tracks();
+        let player = RocketPlayer::new(tracks);
+        assert!(player
+            .get_track("hello this track should not exist")
+            .is_none());
+    }
+}
