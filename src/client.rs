@@ -1,4 +1,4 @@
-//! This module contains the main client code, including the [`Client`] type.
+//! This module contains the main client code, including the [`RocketClient`] type.
 use crate::interpolation::*;
 use crate::track::*;
 
@@ -51,7 +51,7 @@ pub enum Event {
     /// The tracker pauses or unpauses.
     Pause(bool),
     /// The tracker asks us to save our track data.
-    /// You may want to call [`Client::save_tracks`] after receiving this event.
+    /// You may want to call [`RocketClient::save_tracks`] after receiving this event.
     SaveTracks,
 }
 
@@ -62,16 +62,16 @@ enum ReceiveResult {
 }
 
 #[derive(Debug)]
-/// The `Client` type. This contains the connected socket and other fields.
-pub struct Client {
+/// The `RocketClient` type. This contains the connected socket and other fields.
+pub struct RocketClient {
     stream: TcpStream,
     state: ClientState,
     cmd: Vec<u8>,
     tracks: Vec<Track>,
 }
 
-impl Client {
-    /// Construct a new Client.
+impl RocketClient {
+    /// Construct a new RocketClient.
     ///
     /// This constructs a new Rocket client and connect to localhost on port 1338.
     ///
@@ -83,14 +83,14 @@ impl Client {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Client;
-    /// let mut rocket = Client::new().unwrap();
+    /// # use rust_rocket::RocketClient;
+    /// let mut rocket = RocketClient::new().unwrap();
     /// ```
     pub fn new() -> Result<Self, Error> {
         Self::connect("localhost", 1338)
     }
 
-    /// Construct a new Client.
+    /// Construct a new RocketClient.
     ///
     /// This constructs a new Rocket client and connects to a specified host and port.
     ///
@@ -102,8 +102,8 @@ impl Client {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Client;
-    /// let mut rocket = Client::connect("localhost", 1338).unwrap();
+    /// # use rust_rocket::RocketClient;
+    /// let mut rocket = RocketClient::connect("localhost", 1338).unwrap();
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Self, Error> {
         let stream = TcpStream::connect((host, port)).map_err(Error::Connect)?;
@@ -136,8 +136,8 @@ impl Client {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Client;
-    /// # let mut rocket = Client::new().unwrap();
+    /// # use rust_rocket::RocketClient;
+    /// # let mut rocket = RocketClient::new().unwrap();
     /// let track = rocket.get_track_mut("namespace:track").unwrap();
     /// track.get_value(3.5);
     /// ```
@@ -163,7 +163,7 @@ impl Client {
 
     /// Get track by name.
     ///
-    /// You should use [`Client::get_track_mut`] to create a track.
+    /// You should use [`RocketClient::get_track_mut`] to create a track.
     pub fn get_track(&self, name: &str) -> Option<&Track> {
         self.tracks.iter().find(|t| t.get_name() == name)
     }
@@ -207,8 +207,8 @@ impl Client {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::Client;
-    /// # let mut rocket = Client::new().unwrap();
+    /// # use rust_rocket::RocketClient;
+    /// # let mut rocket = RocketClient::new().unwrap();
     /// while let Some(event) = rocket.poll_events().unwrap() {
     ///     match event {
     ///         // Do something with the various events.

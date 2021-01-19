@@ -13,17 +13,18 @@ pub enum Error {
     DeserializeTracks(#[source] bincode::Error),
 }
 
-/// A loader for track binary files dumped by [`Client::save_tracks`](crate::Client::save_tracks).
+/// A loader for track binary files dumped by
+/// [`RocketClient::save_tracks`](crate::RocketClient::save_tracks).
 ///
 /// # Usage
 ///
-/// After constructing, call [`Player::get_track`] to get tracks.
+/// After constructing, call [`RocketPlayer::get_track`] to get tracks.
 /// Then call [`Track::get_value`] to get saved values at any given point in time.
-pub struct Player {
+pub struct RocketPlayer {
     tracks: HashMap<String, Track>,
 }
 
-impl Player {
+impl RocketPlayer {
     /// Load track data from file for playback.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, Error> {
         // Load from file

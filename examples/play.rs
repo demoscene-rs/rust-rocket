@@ -1,8 +1,8 @@
-use rust_rocket::Player;
+use rust_rocket::RocketPlayer;
 use std::time::Duration;
 
 fn main() -> Result<(), rust_rocket::player::Error> {
-    let rocket = Player::new("tracks.bin")?;
+    let rocket = RocketPlayer::new("tracks.bin")?;
     let mut current_row = 0;
 
     loop {

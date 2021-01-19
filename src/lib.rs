@@ -6,5 +6,5 @@ pub mod interpolation;
 pub mod player;
 pub mod track;
 
-pub use client::Client;
-pub use player::Player;
+pub use client::RocketClient;
+pub use player::RocketPlayer;
