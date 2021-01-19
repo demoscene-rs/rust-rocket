@@ -1,8 +1,9 @@
 //! This module contains `Key` and `Track` types.
 
 use crate::interpolation::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 /// The `Key` Type.
 pub struct Key {
     row: u32,
@@ -21,7 +22,7 @@ impl Key {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 /// The `Track` Type. This is a collection of `Key`s with a name.
 pub struct Track {
     name: String,
