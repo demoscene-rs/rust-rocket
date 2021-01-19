@@ -3,9 +3,10 @@ use crate::interpolation::*;
 use crate::track::*;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::prelude::*;
-use std::io::Cursor;
-use std::net::TcpStream;
+use std::{
+    io::{prelude::*, Cursor},
+    net::{TcpStream, ToSocketAddrs},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -80,7 +81,7 @@ impl RocketClient {
     /// let mut rocket = RocketClient::new().unwrap();
     /// ```
     pub fn new() -> Result<Self, Error> {
-        Self::connect("localhost", 1338)
+        Self::connect(("localhost", 1338))
     }
 
     /// Construct a new RocketClient.
@@ -96,10 +97,10 @@ impl RocketClient {
     ///
     /// ```rust,no_run
     /// # use rust_rocket::RocketClient;
-    /// let mut rocket = RocketClient::connect("localhost", 1338).unwrap();
+    /// let mut rocket = RocketClient::connect(("localhost", 1338)).unwrap();
     /// ```
-    pub fn connect(host: &str, port: u16) -> Result<Self, Error> {
-        let stream = TcpStream::connect((host, port)).map_err(Error::Connect)?;
+    pub fn connect(addr: impl ToSocketAddrs) -> Result<Self, Error> {
+        let stream = TcpStream::connect(addr).map_err(Error::Connect)?;
 
         let mut rocket = Self {
             stream,
