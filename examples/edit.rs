@@ -1,7 +1,11 @@
-use rust_rocket::client::{RocketClient, Event};
+use rust_rocket::client::{Event, RocketClient};
+use std::error::Error;
+use std::fs::OpenOptions;
 use std::time::Duration;
 
-fn main() -> Result<(), rust_rocket::client::Error> {
+static TRACKS_FILE: &str = "tracks.bin";
+
+fn main() -> Result<(), Box<dyn Error>> {
     let mut rocket = RocketClient::new()?;
     rocket.get_track_mut("test")?;
     rocket.get_track_mut("test2")?;
@@ -28,8 +32,21 @@ fn main() -> Result<(), rust_rocket::client::Error> {
                     );
                 }
                 Event::SaveTracks => {
-                    println!("Saving tracks");
-                    rocket.save_tracks("tracks.bin")?;
+                    // Obtain a clone of current track state
+                    let tracks = rocket.save_tracks();
+
+                    // Open a file for writing, create if not present,
+                    // truncate (overwrite) in case it has previous contents.
+                    let file = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(TRACKS_FILE)?;
+
+                    // Serialize tracks into the file using bincode
+                    bincode::serialize_into(file, &tracks)?;
+                    // See examples/play.rs for deserializing and playback
+                    println!("Tracks saved to {}", TRACKS_FILE);
                 }
             }
             println!("{:?}", event);

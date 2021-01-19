@@ -22,7 +22,7 @@ impl Key {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 /// The `Track` Type. This is a collection of `Key`s with a name.
 pub struct Track {
     name: String,

@@ -1,44 +1,41 @@
-//! This module contains a barebones loader for track files.
+//! This module contains a barebones player.
 use crate::track::Track;
 use std::collections::HashMap;
-use std::fs::File;
-use std::path::Path;
-use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("Failed to open file for reading track data")]
-    OpenTrackFile(#[source] std::io::Error),
-    #[error("Failed to deserialize track data")]
-    DeserializeTracks(#[source] bincode::Error),
-}
-
-/// A loader for track binary files dumped by
+/// A player for tracks dumped by
 /// [`RocketClient::save_tracks`](crate::RocketClient::save_tracks).
 ///
-/// # Usage
+/// # Examples
 ///
-/// After constructing, call [`RocketPlayer::get_track`] to get tracks.
-/// Then call [`Track::get_value`] to get saved values at any given point in time.
+/// ```rust,no_run
+/// # use rust_rocket::RocketClient;
+/// # use rust_rocket::RocketPlayer;
+/// let client = RocketClient::new().unwrap();
+/// // ...
+/// // Run the demo and edit your sync tracks, then call save_tracks
+/// // ...
+/// let tracks = client.save_tracks();
+/// // ...
+/// // Serialize tracks to a file (see examples/edit.rs)
+/// // And deserialize from a file in your release build (examples/play.rs)
+/// // ...
+/// let player = RocketPlayer::new(tracks);
+/// println!("Value at row 123: {}", player.get_track("test").unwrap().get_value(123.));
+/// ```
 pub struct RocketPlayer {
     tracks: HashMap<String, Track>,
 }
 
 impl RocketPlayer {
-    /// Load track data from file for playback.
-    pub fn new(path: impl AsRef<Path>) -> Result<Self, Error> {
-        // Load from file
-        let file = File::open(path).map_err(Error::OpenTrackFile)?;
-        let tracks_vec: Vec<Track> =
-            bincode::deserialize_from(file).map_err(Error::DeserializeTracks)?;
-
+    /// Constructs a `RocketPlayer` from `Track`s.
+    pub fn new(tracks: Vec<Track>) -> Self {
         // Convert to a HashMap for perf (not benchmarked)
-        let mut tracks_map = HashMap::with_capacity(tracks_vec.len());
-        for track in tracks_vec {
+        let mut tracks_map = HashMap::with_capacity(tracks.len());
+        for track in tracks {
             tracks_map.insert(track.get_name().to_owned(), track);
         }
 
-        Ok(Self { tracks: tracks_map })
+        Self { tracks: tracks_map }
     }
 
     /// Get track by name.

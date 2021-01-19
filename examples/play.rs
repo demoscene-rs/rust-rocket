@@ -1,8 +1,21 @@
 use rust_rocket::RocketPlayer;
+use std::error::Error;
+use std::fs::File;
 use std::time::Duration;
 
-fn main() -> Result<(), rust_rocket::player::Error> {
-    let rocket = RocketPlayer::new("tracks.bin")?;
+static TRACKS_FILE: &str = "tracks.bin";
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let rocket = {
+        // Open previously saved file (see examples/edit.rs)
+        let file = File::open(TRACKS_FILE)?;
+        // Deserialize from the file into Vec<Track> using bincode
+        let tracks = bincode::deserialize_from(file)?;
+        // Construct a new read-only, offline RocketPlayer
+        RocketPlayer::new(tracks)
+    };
+    println!("Tracks loaded from {}", TRACKS_FILE);
+
     let mut current_row = 0;
 
     loop {

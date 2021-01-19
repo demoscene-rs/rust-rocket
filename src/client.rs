@@ -6,7 +6,6 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::prelude::*;
 use std::io::Cursor;
 use std::net::TcpStream;
-use std::path::Path;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -28,12 +27,6 @@ pub enum Error {
     #[error("Rocket server disconnected")]
     /// Network IO error during operation
     IOError(#[source] std::io::Error),
-    #[error("Failed to open file for writing track data")]
-    /// The requested track file cannot be written to
-    OpenTrackFile(#[source] std::io::Error),
-    #[error("Failed to serialize tracks")]
-    /// Tracks weren't able to be serialized into the requested track file
-    SerializeTracks(#[source] bincode::Error),
 }
 
 #[derive(Debug)]
@@ -73,7 +66,7 @@ pub struct RocketClient {
 impl RocketClient {
     /// Construct a new RocketClient.
     ///
-    /// This constructs a new Rocket client and connect to localhost on port 1338.
+    /// This constructs a new Rocket client and connects to localhost on port 1338.
     ///
     /// # Errors
     ///
@@ -163,21 +156,16 @@ impl RocketClient {
 
     /// Get track by name.
     ///
-    /// You should use [`RocketClient::get_track_mut`] to create a track.
+    /// You should use [`get_track_mut`](RocketClient::get_track_mut) to create a track.
     pub fn get_track(&self, name: &str) -> Option<&Track> {
         self.tracks.iter().find(|t| t.get_name() == name)
     }
 
-    /// Save tracks to a playable file, overwriting previous track data.
-    pub fn save_tracks(&self, path: impl AsRef<Path>) -> Result<(), Error> {
-        use std::fs::OpenOptions;
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .map_err(Error::OpenTrackFile)?;
-        bincode::serialize_into(file, &self.tracks).map_err(Error::SerializeTracks)
+    /// Create a clone of the tracks in the session which can then be serialized to a file in any
+    /// format with a serde implementation.
+    /// Tracks can be turned into a [`RocketPlayer`](crate::RocketPlayer::new) for playback.
+    pub fn save_tracks(&self) -> Vec<Track> {
+        self.tracks.clone()
     }
 
     /// Send a SetRow message.
