@@ -278,8 +278,8 @@ impl RocketClient {
                     let cmd = cursor.read_u8().unwrap();
                     match cmd {
                         0 => {
-                            // usize::try_from(u32) will only panic if usize is smaller, and there
-                            // are more than usize::MAX tracks in use, which isn't possible because
+                            // usize::try_from(u32) will only be None if usize is smaller, and
+                            // more than usize::MAX tracks are in use. That isn't possible because
                             // I'd imagine Vec::push and everything else will panic first.
                             // If you're running this on a microcontroller, I'd love to see it!
                             let track = &mut self.tracks
