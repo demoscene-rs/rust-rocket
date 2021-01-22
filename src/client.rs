@@ -206,11 +206,6 @@ impl RocketClient {
     ///
     /// This method can return an [`Error::IOError`] if Rocket tracker disconnects.
     ///
-    /// # Panics
-    ///
-    /// This method can panic on esoteric systems where `usize` is smaller than `u32`, and when
-    /// there are more than `usize` tracks in use.
-    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -283,6 +278,10 @@ impl RocketClient {
                     let cmd = cursor.read_u8().unwrap();
                     match cmd {
                         0 => {
+                            // usize::try_from(u32) will only panic if usize is smaller, and there
+                            // are more than usize::MAX tracks in use, which isn't possible because
+                            // I'd imagine Vec::push and everything else will panic first.
+                            // If you're running this on a microcontroller, I'd love to see it!
                             let track = &mut self.tracks
                                 [usize::try_from(cursor.read_u32::<BigEndian>().unwrap()).unwrap()];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
