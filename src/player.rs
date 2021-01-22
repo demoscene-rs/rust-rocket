@@ -76,29 +76,8 @@ mod tests {
 
         // Ugly repeated calls to get_track to reflect average use case :)
 
-        assert_eq!(player.get_track("test1").unwrap().get_value(-1.), 1.0);
         assert_eq!(player.get_track("test1").unwrap().get_value(0.), 1.0);
-        assert_eq!(player.get_track("test1").unwrap().get_value(1.), 1.0);
-
-        assert_eq!(player.get_track("test1").unwrap().get_value(4.), 1.0);
-        assert_eq!(player.get_track("test1").unwrap().get_value(5.), 0.0);
-        assert_eq!(player.get_track("test1").unwrap().get_value(6.), 0.0);
-
-        assert_eq!(player.get_track("test1").unwrap().get_value(9.), 0.0);
-        assert_eq!(player.get_track("test1").unwrap().get_value(10.), 1.0);
-        assert_eq!(player.get_track("test1").unwrap().get_value(11.), 1.0);
-
-        assert_eq!(player.get_track("test2").unwrap().get_value(-1.), 2.0);
         assert_eq!(player.get_track("test2").unwrap().get_value(0.), 2.0);
-        assert_eq!(player.get_track("test2").unwrap().get_value(1.), 2.0);
-
-        assert_eq!(player.get_track("test2").unwrap().get_value(4.), 2.0);
-        assert_eq!(player.get_track("test2").unwrap().get_value(5.), 0.0);
-        assert_eq!(player.get_track("test2").unwrap().get_value(6.), 0.0);
-
-        assert_eq!(player.get_track("test2").unwrap().get_value(9.), 0.0);
-        assert_eq!(player.get_track("test2").unwrap().get_value(10.), 2.0);
-        assert_eq!(player.get_track("test2").unwrap().get_value(11.), 2.0);
     }
 
     #[test]

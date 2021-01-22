@@ -4,7 +4,8 @@ use crate::track::*;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::{
-    io::{prelude::*, Cursor},
+    convert::TryFrom,
+    io::{Cursor, Read, Write},
     net::{TcpStream, ToSocketAddrs},
 };
 use thiserror::Error;
@@ -127,6 +128,10 @@ impl RocketClient {
     ///
     /// This method can return an [`Error::IOError`] if Rocket tracker disconnects.
     ///
+    /// # Panics
+    ///
+    /// Will panic if `name`'s length exceeds [`u32::MAX`].
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -146,12 +151,18 @@ impl RocketClient {
         } else {
             // Send GET_TRACK message
             let mut buf = vec![2];
-            buf.write_u32::<BigEndian>(name.len() as u32).unwrap();
+            buf.write_u32::<BigEndian>(u32::try_from(name.len()).expect("Track name too long"))
+                .unwrap_or_else(|_|
+                // Can writes to a vec fail? Consider changing to unreachable_unchecked in 1.0
+                unreachable!());
             buf.extend_from_slice(&name.as_bytes());
             self.stream.write_all(&buf).map_err(Error::IOError)?;
 
             self.tracks.push(Track::new(name));
-            Ok(self.tracks.last_mut().unwrap())
+            Ok(self.tracks.last_mut().unwrap_or_else(||
+                // tracks cannot be empty right after pushing into it, consider changing to
+                // unreachable_unchecked in 1.0
+                unreachable!()))
         }
     }
 
@@ -179,7 +190,9 @@ impl RocketClient {
     pub fn set_row(&mut self, row: u32) -> Result<(), Error> {
         // Send SET_ROW message
         let mut buf = vec![3];
-        buf.write_u32::<BigEndian>(row).unwrap();
+        buf.write_u32::<BigEndian>(row).unwrap_or_else(|_|
+                // Can writes to a vec fail? Consider changing to unreachable_unchecked in 1.0
+                unreachable!());
         self.stream.write_all(&buf).map_err(Error::IOError)
     }
 
@@ -192,6 +205,11 @@ impl RocketClient {
     /// # Errors
     ///
     /// This method can return an [`Error::IOError`] if Rocket tracker disconnects.
+    ///
+    /// # Panics
+    ///
+    /// This method can panic on esoteric systems where `usize` is smaller than `u32`, and when
+    /// there are more than `usize` tracks in use.
     ///
     /// # Examples
     ///
@@ -260,12 +278,13 @@ impl RocketClient {
             ClientState::Complete => {
                 let mut result = ReceiveResult::None;
                 {
+                    // Following reads from cmd should never fail if above match arms are correct
                     let mut cursor = Cursor::new(&self.cmd);
                     let cmd = cursor.read_u8().unwrap();
                     match cmd {
                         0 => {
-                            let track =
-                                &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
+                            let track = &mut self.tracks
+                                [usize::try_from(cursor.read_u32::<BigEndian>().unwrap()).unwrap()];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
                             let value = cursor.read_f32::<BigEndian>().unwrap();
                             let interpolation = Interpolation::from(cursor.read_u8().unwrap());
@@ -274,8 +293,8 @@ impl RocketClient {
                             track.set_key(key);
                         }
                         1 => {
-                            let track =
-                                &mut self.tracks[cursor.read_u32::<BigEndian>().unwrap() as usize];
+                            let track = &mut self.tracks
+                                [usize::try_from(cursor.read_u32::<BigEndian>().unwrap()).unwrap()];
                             let row = cursor.read_u32::<BigEndian>().unwrap();
 
                             track.delete_key(row);
