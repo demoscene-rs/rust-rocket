@@ -6,7 +6,7 @@ license = "MIT"
 description = """
 A client implementation of GNU Rocket.
 """
-repository = "https://github.com/darksecond/rust-rocket"
+repository = "https://github.com/demoscene-rs/rust-rocket"
 edition = "2018"
 
 [dependencies]
