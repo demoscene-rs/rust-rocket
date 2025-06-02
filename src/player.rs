@@ -10,32 +10,33 @@ use std::collections::HashMap;
 /// ```rust,no_run
 /// # use rust_rocket::RocketClient;
 /// # use rust_rocket::RocketPlayer;
-/// let client = RocketClient::new().unwrap();
-/// // ...
-/// // Run the demo and edit your sync tracks, then call save_tracks
-/// // ...
+/// let mut client = RocketClient::new()?;
+///
+/// // Run the demo and edit your sync tracks, then call save_tracks...
+///
 /// let tracks = client.save_tracks();
-/// // ...
-/// // Serialize tracks to a file (see examples/edit.rs)
-/// // And deserialize from a file in your release build (examples/play.rs)
-/// // ...
-/// let player = RocketPlayer::new(tracks);
+///
+/// // Serialize tracks to a file (see examples/edit.rs)...
+/// // ...And deserialize from a file in your release build (examples/play.rs)
+///
+/// let player = RocketPlayer::new(tracks.to_vec());
 /// println!("Value at row 123: {}", player.get_track("test").unwrap().get_value(123.));
+/// # Ok::<(), rust_rocket::client::Error>(())
 /// ```
 pub struct RocketPlayer {
-    tracks: HashMap<String, Track>,
+    tracks: HashMap<Box<str>, Track>,
 }
 
 impl RocketPlayer {
     /// Constructs a `RocketPlayer` from `Track`s.
     pub fn new(tracks: Vec<Track>) -> Self {
         // Convert to a HashMap for perf (not benchmarked)
-        let mut tracks_map = HashMap::with_capacity(tracks.len());
-        for track in tracks {
-            tracks_map.insert(track.get_name().to_owned(), track);
-        }
+        let tracks: HashMap<Box<str>, Track> = tracks
+            .into_iter()
+            .map(|track| (String::from(track.get_name()).into_boxed_str(), track))
+            .collect();
 
-        Self { tracks: tracks_map }
+        Self { tracks }
     }
 
     /// Get track by name.

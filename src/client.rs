@@ -79,7 +79,8 @@ impl RocketClient {
     ///
     /// ```rust,no_run
     /// # use rust_rocket::RocketClient;
-    /// let mut rocket = RocketClient::new().unwrap();
+    /// let mut rocket = RocketClient::new()?;
+    /// # Ok::<(), rust_rocket::client::Error>(())
     /// ```
     pub fn new() -> Result<Self, Error> {
         Self::connect(("localhost", 1338))
@@ -98,7 +99,8 @@ impl RocketClient {
     ///
     /// ```rust,no_run
     /// # use rust_rocket::RocketClient;
-    /// let mut rocket = RocketClient::connect(("localhost", 1338)).unwrap();
+    /// let mut rocket = RocketClient::connect(("localhost", 1338))?;
+    /// # Ok::<(), rust_rocket::client::Error>(())
     /// ```
     pub fn connect(addr: impl ToSocketAddrs) -> Result<Self, Error> {
         let stream = TcpStream::connect(addr).map_err(Error::Connect)?;
@@ -136,9 +138,10 @@ impl RocketClient {
     ///
     /// ```rust,no_run
     /// # use rust_rocket::RocketClient;
-    /// # let mut rocket = RocketClient::new().unwrap();
-    /// let track = rocket.get_track_mut("namespace:track").unwrap();
+    /// # let mut rocket = RocketClient::new()?;
+    /// let track = rocket.get_track_mut("namespace:track")?;
     /// track.get_value(3.5);
+    /// # Ok::<(), rust_rocket::client::Error>(())
     /// ```
     pub fn get_track_mut(&mut self, name: &str) -> Result<&mut Track, Error> {
         if let Some((i, _)) = self
@@ -173,11 +176,37 @@ impl RocketClient {
         self.tracks.iter().find(|t| t.get_name() == name)
     }
 
-    /// Create a clone of the tracks in the session which can then be serialized to a file in any
-    /// format with a serde implementation.
-    /// Tracks can be turned into a [`RocketPlayer`](crate::RocketPlayer::new) for playback.
-    pub fn save_tracks(&self) -> Vec<Track> {
-        self.tracks.clone()
+    /// Get a snapshot of the tracks in the session.
+    /// The returned slice can be dumped to a file in any [supported format](crate#features).
+    /// The counterpart to this function is [`RocketPlayer::new`](crate::RocketPlayer::new),
+    /// which loads tracks for playback.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use rust_rocket::RocketClient;
+    /// # use std::fs::OpenOptions;
+    /// let mut rocket = RocketClient::new()?;
+    ///
+    /// // Create tracks, call poll_events, etc...
+    ///
+    /// // Open a file for writing
+    /// let mut file = OpenOptions::new()
+    ///     .write(true)
+    ///     .create(true)
+    ///     .truncate(true)
+    ///     .open("tracks.bin")
+    ///     .expect("Failed to open tracks.bin for writing");
+    ///
+    /// // Save a snapshot of the client to a file for playback in release builds
+    /// let tracks = rocket.save_tracks();
+    /// # #[cfg(feature = "bincode")]
+    /// bincode::encode_into_std_write(tracks, &mut file, bincode::config::standard())
+    ///     .expect("Failed to encode tracks.bin");
+    /// # Ok::<(), rust_rocket::client::Error>(())
+    /// ```
+    pub fn save_tracks(&self) -> &[Track] {
+        self.tracks.as_slice()
     }
 
     /// Send a SetRow message.
@@ -210,13 +239,14 @@ impl RocketClient {
     ///
     /// ```rust,no_run
     /// # use rust_rocket::RocketClient;
-    /// # let mut rocket = RocketClient::new().unwrap();
-    /// while let Some(event) = rocket.poll_events().unwrap() {
+    /// # let mut rocket = RocketClient::new()?;
+    /// while let Some(event) = rocket.poll_events()? {
     ///     match event {
     ///         // Do something with the various events.
     ///         _ => (),
     ///     }
     /// }
+    /// # Ok::<(), rust_rocket::client::Error>(())
     /// ```
     pub fn poll_events(&mut self) -> Result<Option<Event>, Error> {
         loop {
