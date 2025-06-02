@@ -8,9 +8,10 @@ static TRACKS_FILE: &str = "tracks.bin";
 fn main() -> Result<(), Box<dyn Error>> {
     let rocket = {
         // Open previously saved file (see examples/edit.rs)
-        let file = File::open(TRACKS_FILE)?;
+        let mut file = File::open(TRACKS_FILE)?;
         // Deserialize from the file into Vec<Track> using bincode
-        let tracks = bincode::deserialize_from(file)?;
+        let bincode_conf = bincode::config::standard();
+        let tracks = bincode::decode_from_std_read(&mut file, bincode_conf)?;
         // Construct a new read-only, offline RocketPlayer
         RocketPlayer::new(tracks)
     };

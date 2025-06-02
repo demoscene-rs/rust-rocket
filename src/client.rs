@@ -155,7 +155,7 @@ impl RocketClient {
                 .unwrap_or_else(|_|
                 // Can writes to a vec fail? Consider changing to unreachable_unchecked in 1.0
                 unreachable!());
-            buf.extend_from_slice(&name.as_bytes());
+            buf.extend_from_slice(name.as_bytes());
             self.stream.write_all(&buf).map_err(Error::IOError)?;
 
             self.tracks.push(Track::new(name));

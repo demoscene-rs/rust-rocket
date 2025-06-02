@@ -1,10 +1,10 @@
 //! This module contains anything related to interpolation.
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 /// The `Interpolation` Type.
 /// This represents the various forms of interpolation that can be performed.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+#[derive(Debug, Copy, Clone)]
 pub enum Interpolation {
     /// `0`
     Step = 0,

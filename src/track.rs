@@ -1,10 +1,11 @@
 //! This module contains `Key` and `Track` types.
 
 use crate::interpolation::*;
-use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 /// The `Key` Type.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+#[derive(Debug, Clone, Copy)]
 pub struct Key {
     row: u32,
     value: f32,
@@ -22,8 +23,10 @@ impl Key {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
 /// The `Track` Type. This is a collection of `Key`s with a name.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+#[derive(Debug, Clone)]
 pub struct Track {
     name: String,
     keys: Vec<Key>,
@@ -106,7 +109,7 @@ impl Track {
         let t = (row - (lower.row as f32)) / ((higher.row as f32) - (lower.row as f32));
         let it = lower.interpolation.interpolate(t);
 
-        (lower.value as f32) + ((higher.value as f32) - (lower.value as f32)) * it
+        lower.value + (higher.value - lower.value) * it
     }
 }
 
@@ -114,13 +117,16 @@ impl Track {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_three_keys() {
+    fn test_track() -> Track {
         let mut track = Track::new("test");
         track.set_key(Key::new(0, 1.0, Interpolation::Step));
         track.set_key(Key::new(5, 0.0, Interpolation::Step));
-        track.set_key(Key::new(10, 1.0, Interpolation::Step));
+        track.set_key(Key::new(10, 1.0, Interpolation::Linear));
+        track.set_key(Key::new(20, 2.0, Interpolation::Linear));
+        track
+    }
 
+    fn assert_test_track(track: &Track) {
         assert_eq!(track.get_value(-1.), 1.0);
         assert_eq!(track.get_value(0.), 1.0);
         assert_eq!(track.get_value(1.), 1.0);
@@ -131,6 +137,26 @@ mod tests {
 
         assert_eq!(track.get_value(9.), 0.0);
         assert_eq!(track.get_value(10.), 1.0);
-        assert_eq!(track.get_value(11.), 1.0);
+
+        assert!((track.get_value(15.) - 1.5).abs() <= f32::EPSILON);
+        assert_eq!(track.get_value(21.), 2.0);
+    }
+
+    #[test]
+    fn test_keys() {
+        let track = test_track();
+        assert_test_track(&track);
+    }
+
+    #[test]
+    #[cfg(feature = "bincode")]
+    fn test_bincode_roundtrip() {
+        let track = test_track();
+
+        let bincode_conf = bincode::config::standard();
+        let bytes = bincode::encode_to_vec(track, bincode_conf).unwrap();
+        let (decoded_track, _): (Track, usize) =
+            bincode::decode_from_slice(&bytes, bincode_conf).unwrap();
+        assert_test_track(&decoded_track);
     }
 }

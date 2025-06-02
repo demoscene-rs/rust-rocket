@@ -37,14 +37,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     // Open a file for writing, create if not present,
                     // truncate (overwrite) in case it has previous contents.
-                    let file = OpenOptions::new()
+                    let mut file = OpenOptions::new()
                         .write(true)
                         .create(true)
                         .truncate(true)
                         .open(TRACKS_FILE)?;
 
                     // Serialize tracks into the file using bincode
-                    bincode::serialize_into(file, &tracks)?;
+                    let bincode_conf = bincode::config::standard();
+                    bincode::encode_into_std_write(tracks, &mut file, bincode_conf)?;
                     // See examples/play.rs for deserializing and playback
                     println!("Tracks saved to {}", TRACKS_FILE);
                 }
