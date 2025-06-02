@@ -32,9 +32,4 @@ pub use player::RocketPlayer;
 pub use track::Track;
 
 /// Produced by [`RocketClient::save_tracks`] and consumed by [`RocketPlayer::new`]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
-#[repr(transparent)]
-pub struct Tracks {
-    inner: Vec<Track>,
-}
+pub type Tracks = Vec<Track>;

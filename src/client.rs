@@ -206,10 +206,8 @@ impl RocketClient {
     ///     .expect("Failed to encode tracks.bin");
     /// # Ok::<(), rust_rocket::client::Error>(())
     /// ```
-    pub fn save_tracks(&self) -> Tracks {
-        Tracks {
-            inner: self.tracks.clone(),
-        }
+    pub fn save_tracks(&self) -> &Tracks {
+        &self.tracks
     }
 
     /// Send a SetRow message.

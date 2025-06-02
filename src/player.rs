@@ -8,8 +8,7 @@ use std::collections::HashMap;
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use rust_rocket::RocketClient;
-/// # use rust_rocket::RocketPlayer;
+/// # use rust_rocket::{RocketClient, RocketPlayer, Tracks};
 /// let mut client = RocketClient::new()?;
 ///
 /// // Run the demo and edit your sync tracks, then call save_tracks...
@@ -19,6 +18,7 @@ use std::collections::HashMap;
 /// // Serialize tracks to a file (see examples/edit.rs)...
 /// // ...And deserialize from a file in your release build (examples/play.rs)
 ///
+/// # let tracks = tracks.clone();
 /// let player = RocketPlayer::new(tracks);
 /// println!("Value at row 123: {}", player.get_track("test").unwrap().get_value(123.));
 /// # Ok::<(), rust_rocket::client::Error>(())
@@ -32,7 +32,6 @@ impl RocketPlayer {
     pub fn new(tracks: Tracks) -> Self {
         // Convert to a HashMap for perf (not benchmarked)
         let tracks: HashMap<Box<str>, Track> = tracks
-            .inner
             .into_iter()
             .map(|track| (String::from(track.get_name()).into_boxed_str(), track))
             .collect();
@@ -53,24 +52,22 @@ mod tests {
     use crate::track::Key;
 
     fn get_test_tracks() -> Tracks {
-        Tracks {
-            inner: vec![
-                {
-                    let mut track = Track::new("test1");
-                    track.set_key(Key::new(0, 1.0, Interpolation::Step));
-                    track.set_key(Key::new(5, 0.0, Interpolation::Step));
-                    track.set_key(Key::new(10, 1.0, Interpolation::Step));
-                    track
-                },
-                {
-                    let mut track = Track::new("test2");
-                    track.set_key(Key::new(0, 2.0, Interpolation::Step));
-                    track.set_key(Key::new(5, 0.0, Interpolation::Step));
-                    track.set_key(Key::new(10, 2.0, Interpolation::Step));
-                    track
-                },
-            ],
-        }
+        vec![
+            {
+                let mut track = Track::new("test1");
+                track.set_key(Key::new(0, 1.0, Interpolation::Step));
+                track.set_key(Key::new(5, 0.0, Interpolation::Step));
+                track.set_key(Key::new(10, 1.0, Interpolation::Step));
+                track
+            },
+            {
+                let mut track = Track::new("test2");
+                track.set_key(Key::new(0, 2.0, Interpolation::Step));
+                track.set_key(Key::new(5, 0.0, Interpolation::Step));
+                track.set_key(Key::new(10, 2.0, Interpolation::Step));
+                track
+            },
+        ]
     }
 
     #[test]
