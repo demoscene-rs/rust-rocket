@@ -1,6 +1,7 @@
 //! This module contains the main client code, including the [`RocketClient`] type.
 use crate::interpolation::*;
 use crate::track::*;
+use crate::Tracks;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::{
@@ -177,7 +178,7 @@ impl RocketClient {
     }
 
     /// Get a snapshot of the tracks in the session.
-    /// The returned slice can be dumped to a file in any [supported format](crate#features).
+    /// The returned [`Tracks`] can be dumped to a file in any [supported format](crate#features).
     /// The counterpart to this function is [`RocketPlayer::new`](crate::RocketPlayer::new),
     /// which loads tracks for playback.
     ///
@@ -205,8 +206,10 @@ impl RocketClient {
     ///     .expect("Failed to encode tracks.bin");
     /// # Ok::<(), rust_rocket::client::Error>(())
     /// ```
-    pub fn save_tracks(&self) -> &[Track] {
-        self.tracks.as_slice()
+    pub fn save_tracks(&self) -> Tracks {
+        Tracks {
+            inner: self.tracks.clone(),
+        }
     }
 
     /// Send a SetRow message.

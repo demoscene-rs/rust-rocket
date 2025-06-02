@@ -9,8 +9,8 @@
 //!
 //! # Features
 //!
-//! - `serde`: Derive [serde](https://crates.io/crates/serde)'s traits on the [`Track`](track::Track)-type
-//! - `bincode`: Derive [bincode](https://crates.io/crates/bincode)'s traits on the [`Track`](track::Track)-type
+//! - `serde`: Derive [serde](https://crates.io/crates/serde)'s traits on the [`Track`]-type
+//! - `bincode`: Derive [bincode](https://crates.io/crates/bincode)'s traits on the [`Track`]-type
 //!
 //! Both features are mutually compatible, but if you choose to use bincode as your serialization library,
 //! you don't need to use `serde`.
@@ -29,3 +29,12 @@ pub mod track;
 
 pub use client::RocketClient;
 pub use player::RocketPlayer;
+pub use track::Track;
+
+/// Produced by [`RocketClient::save_tracks`] and consumed by [`RocketPlayer::new`]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
+#[repr(transparent)]
+pub struct Tracks {
+    inner: Vec<Track>,
+}
