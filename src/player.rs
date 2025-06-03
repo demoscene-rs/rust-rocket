@@ -69,6 +69,10 @@ use std::collections::HashMap;
 /// A player for tracks from
 /// [`RocketClient::save_tracks`](crate::RocketClient::save_tracks).
 ///
+/// # Usage
+///
+/// See [module-level documentation](crate::player#Usage).
+///
 /// # Examples
 ///
 /// ```rust,no_run

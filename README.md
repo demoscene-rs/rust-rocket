@@ -24,4 +24,4 @@ Links
 =====
 
 * [GNU Rocket](https://github.com/rocket/rocket), Primary implementation of Rocket.
-* [RocketEditor](https://github.com/emoon/rocket), An alternative server (editor).
+* [RocketEditor](https://github.com/emoon/rocket), An alternative tracker (editor).

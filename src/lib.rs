@@ -1,7 +1,7 @@
 //! This crate implements a client library and a player for the [rocket sync tracker](https://github.com/rocket/rocket).
-//! You can connect to a rocket editor, get values from tracks, and live-edit your production.
+//! You can connect to a rocket tracker, get values from tracks, and live-edit your production.
 //!
-//! The [`client`] module contains the types which you need to connect to a Rocket server and edit your production.
+//! The [`client`] module contains the types which you need to connect to a Rocket tracker and edit your production.
 //!
 //! The [`player`] module contains a player which you can use when building your production in release mode.
 //!
@@ -19,12 +19,12 @@
 //!
 //! The usual workflow with this library can be described in a few steps:
 //!
-//! 0. Install a rocket editor ([original Qt editor](https://github.com/rocket/rocket)
+//! 0. Install a rocket tracker ([original Qt editor](https://github.com/rocket/rocket)
 //!    or [emoon's OpenGL-based editor](https://github.com/emoon/rocket))
-//! 1. Connect the [`RocketClient`] to the running editor by calling [`RocketClient::new`]
+//! 1. Connect the [`RocketClient`] to the running tracker by calling [`RocketClient::new`]
 //! 2. Create tracks with [`get_track_mut`](RocketClient::get_track_mut)
-//! 3. In your main loop, poll for updates from the Rocket server by calling [`poll_events`](RocketClient::poll_events).
-//! 4. Keep the editor in sync by calling [`set_row`](RocketClient::set_row) (see tips below)
+//! 3. In your main loop, poll for updates from the Rocket tracker by calling [`poll_events`](RocketClient::poll_events).
+//! 4. Keep the tracker in sync by calling [`set_row`](RocketClient::set_row) (see tips below)
 //! 5. Get values from the tracks with [`Track::get_value`]
 //!
 //! See the linked documentation items and the examples-directory for more examples.
@@ -90,7 +90,7 @@
 //!         let time = music.get_time();
 //!         let row = time_to_row(time);
 //!
-//!         // Keep the rocket editor in sync
+//!         // Keep the rocket tracker in sync
 //!         rocket.set_row(row as u32);
 //!
 //!         // Render frame and read values with Track's get_value function
