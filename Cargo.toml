@@ -1,6 +1,6 @@
 [package]
 name = "rust-rocket"
-version = "0.10.0"
+version = "0.10.1"
 authors = [
   "Tim Peters <mail@darksecond.nl>",
   "Lauri Gustafsson <lauri.gustafsson@iki.fi>",
@@ -12,6 +12,9 @@ A client implementation of GNU Rocket.
 repository = "https://github.com/demoscene-rs/rust-rocket"
 edition = "2018"
 rust-version = "1.61"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
 simple = ["bincode"] # Enables the simple API
