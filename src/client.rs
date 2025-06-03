@@ -35,9 +35,9 @@ const MAX_COMMAND_LEN: usize = SET_KEY_LEN;
 /// The `Error` Type. This is the main error type.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Failed to establish a TCP connection with the Rocket tracker")]
     /// Failure to connect to a rocket tracker. This can happen if the tracker is not running, the
     /// address isn't correct or other network-related reasons.
+    #[error("Failed to establish a TCP connection with the Rocket tracker")]
     Connect(#[source] std::io::Error),
     /// Failure to transmit or receive greetings with the tracker
     #[error("Handshake with the Rocket tracker failed")]
