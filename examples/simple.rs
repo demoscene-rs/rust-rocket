@@ -29,9 +29,7 @@ impl TimeSource {
 
     fn pause(&mut self, state: bool) {
         self.offset = self.get_time();
-        if !state {
-            self.start = Instant::now();
-        }
+        self.start = Instant::now();
         self.paused = state;
     }
 
