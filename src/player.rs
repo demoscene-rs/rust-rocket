@@ -1,26 +1,91 @@
-//! This module contains a barebones player.
+//! This module contains a player for previously saved tracks, [`RocketPlayer`].
+//!
+//! # Usage
+//!
+//! This crate makes no distinction between client builds (debug builds) and player builds (release builds),
+//! nor does it offer any generics or traits for polymorphism between the [`RocketClient`](crate::RocketClient)
+//! and [`RocketPlayer`].
+//!
+//! Currently, it's expected that you use conditional compilation to provide a consistent interface to the rest of your
+//! production, so that in debug builds you use the [`RocketClient`](crate::RocketClient)
+//! and in release builds you use the [`RocketPlayer`].
+//!
+//! In future releases, this may become a built-in feature, but for the current version,
+//! you may use the following pattern:
+//!
+//! ```rust,no_run
+//! # use rust_rocket::{RocketClient, RocketPlayer, Tracks};
+//! # use std::fs::File;
+//! struct MySync {
+//!     row: f32,
+//!     #[cfg(feature = "client")]
+//!     rocket: RocketClient,
+//!     #[cfg(not(feature = "client"))]
+//!     rocket: RocketPlayer,
+//! }
+//!
+//! impl MySync {
+//!     fn new() -> Self {
+//!         #[cfg(feature = "client")]
+//!         let rocket = RocketClient::new().unwrap();
+//!         #[cfg(not(feature = "client"))]
+//!         let rocket = {
+//!             let mut file = File::open("tracks.bin").unwrap();
+//! #            #[cfg(feature = "bincode")]
+//!             let tracks = bincode::decode_from_std_read(
+//!                 &mut file,
+//!                 bincode::config::standard()
+//!             ).unwrap();
+//! #            #[cfg(not(feature = "bincode"))]
+//! #            let tracks = Tracks::default();
+//!             RocketPlayer::new(tracks)
+//!         };
+//!
+//!         Self {
+//!             row: 0.,
+//!             rocket,
+//!         }
+//!     }
+//!
+//!     fn set_row(&mut self, row: f32) {
+//!         #[cfg(feature = "client")]
+//!         self.rocket.set_row(row as u32);
+//!         self.row = row;
+//!     }
+//!
+//!     fn get_value(&mut self, track: &str) -> f32 {
+//!         #[cfg(feature = "client")]
+//!         let track = self.rocket.get_track_mut(track).unwrap();
+//!         #[cfg(not(feature = "client"))]
+//!         let track = self.rocket.get_track(track).unwrap();
+//!         track.get_value(self.row)
+//!     }
+//! }
+//! ```
+
 use crate::{track::Track, Tracks};
 use std::collections::HashMap;
 
-/// A player for tracks dumped by
+/// A player for tracks from
 /// [`RocketClient::save_tracks`](crate::RocketClient::save_tracks).
 ///
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use rust_rocket::{RocketClient, RocketPlayer, Tracks};
-/// let mut client = RocketClient::new()?;
+/// # use rust_rocket::{RocketPlayer, Tracks};
+/// # use std::fs::File;
+/// // Run the demo and edit your sync tracks (see top level documentation),
+/// // then call save_tracks and serialize tracks to a file (see save_tracks documentation)
 ///
-/// // Run the demo and edit your sync tracks, then call save_tracks...
-///
-/// let tracks = client.save_tracks();
-///
-/// // Serialize tracks to a file (see examples/edit.rs)...
-/// // ...And deserialize from a file in your release build (examples/play.rs)
-///
-/// # let tracks = tracks.clone();
+/// // And deserialize from a file in your release build
+/// let mut file = File::open("tracks.bin").expect("Failed to open tracks.bin");
+/// # #[cfg(feature = "bincode")]
+/// # {
+/// let tracks = bincode::decode_from_std_read(&mut file, bincode::config::standard())
+///     .expect("Failed to decode tracks.bin");
 /// let player = RocketPlayer::new(tracks);
 /// println!("Value at row 123: {}", player.get_track("test").unwrap().get_value(123.));
+/// # }
 /// # Ok::<(), rust_rocket::client::Error>(())
 /// ```
 pub struct RocketPlayer {
