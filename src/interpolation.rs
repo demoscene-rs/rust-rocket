@@ -1,4 +1,4 @@
-//! This module contains anything related to interpolation.
+//! Interpolation.
 
 /// The `Interpolation` Type.
 /// This represents the various forms of interpolation that can be performed.

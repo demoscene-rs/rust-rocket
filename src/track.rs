@@ -1,4 +1,4 @@
-//! This module contains `Key` and `Track` types.
+//! [`Key`] and [`Track`] types.
 
 use crate::interpolation::*;
 

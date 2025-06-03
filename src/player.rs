@@ -1,4 +1,4 @@
-//! This module contains a player for previously saved tracks, [`RocketPlayer`].
+//! Player code for playing previously saved tracks, [`RocketPlayer`].
 //!
 //! # Usage
 //!

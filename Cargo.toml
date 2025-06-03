@@ -1,6 +1,6 @@
 [package]
 name = "rust-rocket"
-version = "0.9.1"
+version = "0.10.0"
 authors = [
   "Tim Peters <mail@darksecond.nl>",
   "Lauri Gustafsson <lauri.gustafsson@iki.fi>",
@@ -12,6 +12,10 @@ A client implementation of GNU Rocket.
 repository = "https://github.com/demoscene-rs/rust-rocket"
 edition = "2018"
 rust-version = "1.61"
+
+[features]
+simple = ["bincode"] # Enables the simple API
+player = ["simple"] # Makes the simple API behave as a file player, not a client
 
 [dependencies]
 byteorder = "1"
@@ -26,3 +30,7 @@ required-features = ["bincode"]
 [[example]]
 name = "play"
 required-features = ["bincode"]
+
+[[example]]
+name = "simple"
+required-features = ["simple"]
