@@ -66,7 +66,7 @@ fn main() {
             None => rocket.set_time(time),
         }
 
-        // Render your prodution here
+        // Render your production here
         println!("{:?}: test = {}", time, rocket.get_value("test"));
         thread::sleep(Duration::from_millis(10));
     }
