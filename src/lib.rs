@@ -1,7 +1,7 @@
 //! This crate implements a client library and a player for the [rocket sync tracker](https://github.com/rocket/rocket).
 //! You can connect to a rocket tracker, get values from tracks, and live-edit your production.
 //!
-//! **There are two styles for using this crate:**
+//! **There are two alternative APIs in this crate:**
 //!
 //! ## Simple API
 //!
@@ -26,7 +26,7 @@
 //! All features are mutually compatible, but if you choose to use `bincode` as your serialization library,
 //! you don't need to use `serde`.
 //!
-//! The `simple` API enables `bincode`.
+//! The `simple` feature enables `bincode`.
 
 pub mod client;
 pub mod interpolation;

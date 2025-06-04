@@ -3,7 +3,8 @@
 //! An opinionated abstraction for the lower level [`client`](crate::client) and [`player`](crate::player) API.
 //!
 //! Requires the `simple`-feature.
-//! Errors are handled by printing to stderr, then attempting to reconnect where applicable, and panicking if not.
+//! All errors are printed to stderr, and the connection to the tracker will be automatically re-established
+//! where applicable.
 //!
 //! # Usage
 //!
@@ -44,7 +45,7 @@
 //!
 //! fn main() {
 //!     let mut music = MusicPlayer::new(/* ... */);
-//!     let mut rocket = Rocket::new("tracks.bin", music.get_bpm());
+//!     let mut rocket = Rocket::new("tracks.bin", music.get_bpm()).unwrap();
 //!
 //!     // Create window, render resources etc...
 //!
@@ -56,7 +57,7 @@
 //!         // It's recommended to combine consecutive seek events to a single seek.
 //!         // This ensures the smoothest scrolling in editor.
 //!         let mut seek = None;
-//!         while let Some(event) = rocket.poll_events() {
+//!         while let Some(event) = rocket.poll_events().ok().flatten() {
 //!             match dbg!(event) {
 //!                 Event::Seek(to) => seek = Some(to),
 //!                 Event::Pause(state) => music.pause(state),
@@ -84,15 +85,16 @@
 //! - Sub-optimal performance, the implementation does not support caching tracks
 //!   (only [`get_value`](Rocket::get_value), no [`get_track`](crate::RocketClient::get_track)).
 //!   It's unlikely that this causes noticeable slowdown unless you have an abnormally large amount of tracks.
-//! - Non-`player` builds: most functions may block if the connection to the rocket tracker is lost.
-//! - Can't handle or ignore errors manually.
+//! - Non-`player` builds: the `poll_events`(Rocket::poll_events) function may block if the rocket tracker disconnects.
+//! - **Caution**: reconnection will wipe track state. Make sure to save in the editor before closing and reopening it.
 //!
 //! # Benefits
 //!
 //! - Get started quickly!
 //! - Avoid writing `#[cfg(...)]`-attributes in your code.
-//! - Sensible error handling that you may want if you're not size-restricted.
+//! - Sensible error handling that you may want to write anyway if you're not size-restricted.
 
+use bincode::error::{DecodeError, EncodeError};
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -100,27 +102,28 @@ use std::{
 
 const SECS_PER_MINUTE: f32 = 60.;
 const ROWS_PER_BEAT: f32 = 8.;
+const PREFIX: &str = "rocket";
 
-fn print_msg(msg: &str) {
-    eprintln!("rocket: {msg}");
+/// Print a message to stderr. Prefixed with `prefix: `.
+///
+/// # Example
+///
+/// ```rust
+/// use rust_rocket::simple::print_msg;
+/// print_msg(env!("CARGO_CRATE_NAME"), "Using software renderer");
+/// ```
+pub fn print_msg(prefix: &str, msg: &str) {
+    eprintln!("{prefix}: {msg}");
 }
 
-fn print_errors(error: &dyn std::error::Error) {
-    let mut error = Some(error);
+/// Print an error and its sources to stderr. Prefixed with `prefix: `.
+pub fn print_errors(prefix: &str, error: &dyn std::error::Error) {
+    eprintln!("{prefix}: {error}");
+    let mut error = error.source();
     while let Some(e) = error {
-        eprintln!("rocket: {e}");
+        eprintln!("    Caused by: {e}");
         error = e.source();
     }
-}
-
-fn die(error: Option<&dyn std::error::Error>, msg: Option<&str>) -> ! {
-    if let Some(msg) = msg {
-        print_msg(msg);
-    }
-    if let Some(error) = error {
-        print_errors(error);
-    }
-    panic!("rocket: Can't recover")
 }
 
 /// An `Event` type.
@@ -142,6 +145,8 @@ pub struct Rocket {
     bps: f32,
     row: f32,
     #[cfg(not(feature = "player"))]
+    connected: bool,
+    #[cfg(not(feature = "player"))]
     rocket: crate::RocketClient,
     #[cfg(feature = "player")]
     rocket: crate::RocketPlayer,
@@ -153,17 +158,21 @@ impl Rocket {
     /// # Without `player` feature
     ///
     /// Attemps to connect to a rocket tracker, and retries indefinitely every 1s if connection can't be established,
-    /// during which the caller is **blocked**.
+    /// during which the function doesn't return and the caller is **blocked**.
     ///
     /// # With `player` feature
     ///
     /// Loads tracks from file specified by `path` using [`bincode`].
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// With `player` feature: This function may panic if the file specified by `path` is unreadable or cannot be
-    /// decoded by [`bincode`].
-    pub fn new<P: AsRef<Path>>(path: P, bpm: f32) -> Self {
+    /// Any errors that occur are first printed to stderr, then returned to the caller.
+    ///
+    /// An error is returned If the file specified by `path` cannot be read or its contents cannot be decoded.
+    ///
+    /// The return value can be handled by calling [`unwrap`](Result::unwrap) if you want to panic,
+    /// or [`ok`](Result::ok) if you want to ignore the error and continue without using rocket.
+    pub fn new<P: AsRef<Path>>(path: P, bpm: f32) -> Result<Self, DecodeError> {
         let path = PathBuf::from(path.as_ref());
 
         #[cfg(not(feature = "player"))]
@@ -171,25 +180,37 @@ impl Rocket {
 
         #[cfg(feature = "player")]
         let rocket = {
-            let mut file = std::fs::File::open(&path).unwrap_or_else(|ref e| {
-                die(Some(e), Some(&format!("Failed to open {}", path.display())))
-            });
-            let tracks = bincode::decode_from_std_read(&mut file, bincode::config::standard())
-                .unwrap_or_else(|ref e| {
-                    die(
-                        Some(e),
-                        Some(&format!("Failed to decode {}", path.display())),
-                    )
-                });
+            let mut file = match std::fs::File::open(&path) {
+                Ok(file) => file,
+                Err(e) => {
+                    print_msg(PREFIX, &format!("Failed to open {}", path.display()));
+                    print_errors(PREFIX, &e);
+                    return Err(DecodeError::Io {
+                        inner: e,
+                        additional: 0,
+                    });
+                }
+            };
+            let tracks = match bincode::decode_from_std_read(&mut file, bincode::config::standard())
+            {
+                Ok(tracks) => tracks,
+                Err(e) => {
+                    print_msg(PREFIX, &format!("Failed to read {}", path.display()));
+                    print_errors(PREFIX, &e);
+                    return Err(e);
+                }
+            };
             crate::RocketPlayer::new(tracks)
         };
 
-        Self {
+        Ok(Self {
             path,
             bps: bpm / SECS_PER_MINUTE,
             row: 0.,
+            #[cfg(not(feature = "player"))]
+            connected: true,
             rocket,
-        }
+        })
     }
 
     /// Get value based on previous call to [`set_time`](Self::set_time), by track name.
@@ -200,26 +221,29 @@ impl Rocket {
     /// the function handles the error by printing to stderr and panicking.
     pub fn get_value(&mut self, track: &str) -> f32 {
         #[cfg(not(feature = "player"))]
-        let track = loop {
-            match self.rocket.get_track_mut(track) {
-                Ok(track) => break track,
-                Err(ref e) => {
-                    print_errors(e);
-                    self.rocket = Self::connect();
+        let track = {
+            if !self.connected {
+                return 0.;
+            }
+            loop {
+                match self.rocket.get_track_mut(track) {
+                    Ok(track) => break track,
+                    Err(ref e) => {
+                        print_errors(PREFIX, e);
+                        self.connected = false;
+                        return 0.;
+                    }
                 }
             }
         };
 
         #[cfg(feature = "player")]
         let track = self.rocket.get_track(track).unwrap_or_else(|| {
-            die(
-                None,
-                Some(&format!(
-                    "Track {} doesn't exist in {}",
-                    track,
-                    self.path.display()
-                )),
-            )
+            print_msg(
+                PREFIX,
+                &format!("Track {} doesn't exist in {}", track, self.path.display()),
+            );
+            panic!("{}: Can't recover", PREFIX);
         });
 
         track.get_value(self.row)
@@ -231,9 +255,11 @@ impl Rocket {
         self.row = beat * ROWS_PER_BEAT;
 
         #[cfg(not(feature = "player"))]
-        while let Err(ref e) = self.rocket.set_row(self.row as u32) {
-            print_errors(e);
-            self.rocket = Self::connect();
+        if self.connected {
+            while let Err(ref e) = self.rocket.set_row(self.row as u32) {
+                print_errors(PREFIX, e);
+                self.connected = false;
+            }
         }
     }
 
@@ -245,12 +271,25 @@ impl Rocket {
     /// You should call this fairly often your main loop.
     /// It is recommended to keep calling this as long as your receive `Some(Event)`.
     ///
+    /// # Errors
+    ///
+    /// Any errors that occur are first printed to stderr, then returned to the caller.
+    ///
+    /// An error is returned if the file specified in call to [`new`](Self::new) cannot be written to.
+    ///
+    /// The return value can be handled by calling [`unwrap`](Result::unwrap) if you want to panic,
+    /// or [`ok`](Result::ok) if you want to ignore the error and continue.
+    ///
     /// # With `player` feature
     ///
     /// The function is a no-op.
-    pub fn poll_events(&mut self) -> Option<Event> {
+    pub fn poll_events(&mut self) -> Result<Option<Event>, EncodeError> {
         #[cfg(not(feature = "player"))]
         loop {
+            if !self.connected {
+                self.rocket = Self::connect();
+                self.connected = true;
+            }
             match self.rocket.poll_events() {
                 Ok(Some(event)) => {
                     let handled = match event {
@@ -260,62 +299,81 @@ impl Rocket {
                         }
                         crate::client::Event::Pause(flag) => Event::Pause(flag),
                         crate::client::Event::SaveTracks => {
-                            self.save_tracks();
+                            self.save_tracks()?;
                             continue;
                         }
                     };
-                    return Some(handled);
+                    return Ok(Some(handled));
                 }
-                Ok(None) => return None,
+                Ok(None) => return Ok(None),
                 Err(ref e) => {
-                    print_errors(e);
-                    self.rocket = Self::connect();
+                    print_errors(PREFIX, e);
+                    self.connected = false;
                 }
             }
         }
 
         #[cfg(feature = "player")]
-        None
+        Ok(None)
     }
 
     /// Save a snapshot of the tracks in the session, overwriting the file specified in call to [`new`](Self::new).
     ///
+    /// # Errors
+    ///
+    /// Any errors that occur are first printed to stderr, then returned to the caller.
+    ///
+    /// An error is returned if the file specified in call to [`new`](Self::new) cannot be written to.
+    ///
+    /// The return value can be handled by calling [`unwrap`](Result::unwrap) if you want to panic,
+    /// or [`ok`](Result::ok) if you want to ignore the error and continue.
+    ///
     /// # With `player` feature
     ///
     /// The function is a no-op.
-    pub fn save_tracks(&self) {
+    pub fn save_tracks(&self) -> Result<(), EncodeError> {
         #[cfg(not(feature = "player"))]
         {
-            let mut file = std::fs::OpenOptions::new()
+            let open_result = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open(&self.path)
-                .unwrap_or_else(|ref e| {
-                    die(
-                        Some(e),
-                        Some(&format!("Failed to open {}", self.path.display())),
-                    )
-                });
+                .open(&self.path);
+
+            let mut file = match open_result {
+                Ok(file) => file,
+                Err(e) => {
+                    print_msg(PREFIX, &format!("Failed to open {}", self.path.display()));
+                    print_errors(PREFIX, &e);
+                    return Err(EncodeError::Io { inner: e, index: 0 });
+                }
+            };
 
             let tracks = self.rocket.save_tracks();
-            bincode::encode_into_std_write(tracks, &mut file, bincode::config::standard())
-                .unwrap_or_else(|ref e| {
-                    die(
-                        Some(e),
-                        Some(&format!("Failed to encode {}", self.path.display())),
-                    )
-                });
+            match bincode::encode_into_std_write(tracks, &mut file, bincode::config::standard()) {
+                Ok(_) => {
+                    print_msg(PREFIX, &format!("Tracks saved to {}", self.path.display()));
+                    Ok(())
+                }
+                Err(e) => {
+                    print_msg(
+                        PREFIX,
+                        &format!("Failed to write to {}", self.path.display()),
+                    );
+                    print_errors(PREFIX, &e);
+                    Err(e)
+                }
+            }
         }
 
         #[cfg(feature = "player")]
-        (/* No-op */)
+        Ok((/* No-op */))
     }
 
     #[cfg(not(feature = "player"))]
     fn connect() -> crate::RocketClient {
         loop {
-            print_msg("Connecting...");
+            print_msg(PREFIX, "Connecting...");
             match crate::RocketClient::new() {
                 Ok(rocket) => return rocket,
                 Err(_) => std::thread::sleep(Duration::from_secs(1)),

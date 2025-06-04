@@ -40,7 +40,7 @@ impl TimeSource {
 }
 
 fn main() {
-    let mut rocket = Rocket::new("tracks.bin", 60.);
+    let mut rocket = Rocket::new("tracks.bin", 60.).unwrap();
     let mut time_source = TimeSource::new();
 
     loop {
@@ -51,7 +51,7 @@ fn main() {
         // It's recommended to combine consecutive seek events to a single seek.
         // This ensures the smoothest scrolling in editor.
         let mut seek = None;
-        while let Some(event) = rocket.poll_events() {
+        while let Some(event) = rocket.poll_events().ok().flatten() {
             match dbg!(event) {
                 Event::Seek(to) => seek = Some(to),
                 Event::Pause(state) => time_source.pause(state),
