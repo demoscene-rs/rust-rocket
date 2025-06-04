@@ -4,7 +4,7 @@
 //!
 //! Requires the `simple`-feature.
 //! All errors are printed to stderr, and the connection to the tracker will be automatically re-established
-//! where applicable.
+//! as long as [`poll_events`](Rocket::poll_events) is called frequently enough.
 //!
 //! # Usage
 //!
@@ -55,15 +55,16 @@
 //!
 //!         // Keep the rocket tracker in sync.
 //!         // It's recommended to combine consecutive seek events to a single seek.
-//!         // This ensures the smoothest scrolling in editor.
 //!         let mut seek = None;
 //!         while let Some(event) = rocket.poll_events().ok().flatten() {
 //!             match dbg!(event) {
 //!                 Event::Seek(to) => seek = Some(to),
 //!                 Event::Pause(state) => music.pause(state),
+//!                 Event::NotConnected => std::thread::sleep(Duration::from_secs(1)),
 //!             }
 //!         }
 //!         // It's recommended to call set_time only when the not seeking.
+//!         // This ensures the smoothest scrolling in editor.
 //!         match seek {
 //!             Some(to) => {
 //!                 music.seek(to);
@@ -78,6 +79,8 @@
 //! }
 //! ```
 //!
+//! For a more thorough example, see `examples/simple.rs`.
+//!
 //! # Caveats
 //!
 //! - Can't choose how to handle [`saving the tracks`](crate::RocketClient::save_tracks), this uses [`std::fs::File`]
@@ -85,7 +88,6 @@
 //! - Sub-optimal performance, the implementation does not support caching tracks
 //!   (only [`get_value`](Rocket::get_value), no [`get_track`](crate::RocketClient::get_track)).
 //!   It's unlikely that this causes noticeable slowdown unless you have an abnormally large amount of tracks.
-//! - Non-`player` builds: [`poll_events`](Rocket::poll_events) may block if the rocket tracker disconnects.
 //! - **Caution**: reconnection will wipe track state. Make sure to save in the editor before closing and reopening it.
 //!
 //! # Benefits
@@ -133,6 +135,13 @@ pub enum Event {
     Seek(Duration),
     /// The tracker pauses or unpauses.
     Pause(bool),
+    /// The client is not connected. Next call to `poll_events` will attempt a reconnection.
+    ///
+    /// A good way to handle this variant is to [`sleep`](std::thread::sleep) for a while and just let your
+    /// [`poll_events`](Rocket::poll_events) loop continue.
+    /// You can also choose to continue your main loop if you have other event sources to poll such as SDL.
+    /// See [module documentation](crate::simple#Examples).
+    NotConnected,
 }
 
 /// Provides sync values.
@@ -148,6 +157,8 @@ pub struct Rocket {
     sent_row: u32,
     #[cfg(not(feature = "player"))]
     connected: bool,
+    #[cfg(not(feature = "player"))]
+    connection_attempted: std::time::Instant,
     #[cfg(not(feature = "player"))]
     rocket: crate::RocketClient,
     #[cfg(feature = "player")]
@@ -178,7 +189,12 @@ impl Rocket {
         let path = PathBuf::from(path.as_ref());
 
         #[cfg(not(feature = "player"))]
-        let rocket = Self::connect();
+        let rocket = loop {
+            match Self::connect() {
+                Ok(rocket) => break rocket,
+                Err(_) => std::thread::sleep(Duration::from_secs(1)),
+            }
+        };
 
         #[cfg(feature = "player")]
         let rocket = {
@@ -213,6 +229,8 @@ impl Rocket {
             sent_row: 0,
             #[cfg(not(feature = "player"))]
             connected: true,
+            #[cfg(not(feature = "player"))]
+            connection_attempted: std::time::Instant::now(),
             rocket,
         })
     }
@@ -225,19 +243,11 @@ impl Rocket {
     /// the function handles the error by printing to stderr and panicking.
     pub fn get_value(&mut self, track: &str) -> f32 {
         #[cfg(not(feature = "player"))]
-        let track = {
-            if !self.connected {
+        let track = match self.rocket.get_track_mut(track) {
+            Ok(track) => track,
+            Err(_) => {
+                self.connected = false;
                 return 0.;
-            }
-            loop {
-                match self.rocket.get_track_mut(track) {
-                    Ok(track) => break track,
-                    Err(ref e) => {
-                        print_errors(PREFIX, e);
-                        self.connected = false;
-                        return 0.;
-                    }
-                }
             }
         };
 
@@ -276,8 +286,8 @@ impl Rocket {
     /// # Without `player` feature
     ///
     /// This polls from events from the tracker.
-    /// You should call this fairly often your main loop.
-    /// It is recommended to keep calling this as long as your receive `Some(Event)`.
+    /// You should call this at least once per frame.
+    /// It is recommended to keep calling this in a `while` loop until you receive `Ok(None)`.
     ///
     /// # Errors
     ///
@@ -286,7 +296,7 @@ impl Rocket {
     /// An error is returned if the file specified in call to [`new`](Self::new) cannot be written to.
     ///
     /// The return value can be handled by calling [`unwrap`](Result::unwrap) if you want to panic,
-    /// or [`ok`](Result::ok) if you want to ignore the error and continue.
+    /// or `.ok().flatten()` if you want to ignore the error and continue.
     ///
     /// # With `player` feature
     ///
@@ -295,8 +305,18 @@ impl Rocket {
         #[cfg(not(feature = "player"))]
         loop {
             if !self.connected {
-                self.rocket = Self::connect();
-                self.connected = true;
+                // Don't spam connect
+                if self.connection_attempted.elapsed() < Duration::from_secs(1) {
+                    return Ok(Some(Event::NotConnected));
+                }
+                self.connection_attempted = std::time::Instant::now();
+                match Self::connect() {
+                    Ok(rocket) => {
+                        self.rocket = rocket;
+                        self.connected = true;
+                    }
+                    Err(_) => return Ok(Some(Event::NotConnected)),
+                }
             }
             match self.rocket.poll_events() {
                 Ok(Some(event)) => {
@@ -379,13 +399,8 @@ impl Rocket {
     }
 
     #[cfg(not(feature = "player"))]
-    fn connect() -> crate::RocketClient {
-        loop {
-            print_msg(PREFIX, "Connecting...");
-            match crate::RocketClient::new() {
-                Ok(rocket) => return rocket,
-                Err(_) => std::thread::sleep(Duration::from_secs(1)),
-            }
-        }
+    fn connect() -> Result<crate::RocketClient, crate::client::Error> {
+        print_msg(PREFIX, "Connecting...");
+        crate::RocketClient::new()
     }
 }

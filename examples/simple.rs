@@ -48,7 +48,9 @@ fn main() {
     let mut time_source = TimeSource::new();
     let mut previous_time = Duration::ZERO;
 
-    loop {
+    'main: loop {
+        // <Handle other event sources such as SDL here>
+
         // Get current frame's time
         let time = time_source.get_time();
 
@@ -56,9 +58,13 @@ fn main() {
         // It's recommended to combine consecutive seek events to a single seek.
         let mut seek = None;
         while let Some(event) = rocket.poll_events().ok().flatten() {
-            match dbg!(event) {
+            match event {
                 Event::Seek(to) => seek = Some(to),
                 Event::Pause(state) => time_source.pause(state),
+                Event::NotConnected => {
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue 'main;
+                }
             }
         }
         // It's recommended to call set_time only when necessary.
@@ -71,7 +77,7 @@ fn main() {
             None => rocket.set_time(time),
         }
 
-        // In a full demo you would render a frame here
+        // <In a full demo you would render a frame here>
 
         // Filter redundant output
         if time != previous_time {
