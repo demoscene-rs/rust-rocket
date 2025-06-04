@@ -85,7 +85,7 @@
 //! - Sub-optimal performance, the implementation does not support caching tracks
 //!   (only [`get_value`](Rocket::get_value), no [`get_track`](crate::RocketClient::get_track)).
 //!   It's unlikely that this causes noticeable slowdown unless you have an abnormally large amount of tracks.
-//! - Non-`player` builds: the `poll_events`(Rocket::poll_events) function may block if the rocket tracker disconnects.
+//! - Non-`player` builds: [`poll_events`](Rocket::poll_events) may block if the rocket tracker disconnects.
 //! - **Caution**: reconnection will wipe track state. Make sure to save in the editor before closing and reopening it.
 //!
 //! # Benefits
