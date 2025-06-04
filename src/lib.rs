@@ -5,7 +5,7 @@
 //!
 //! ## Simple API
 //!
-//! See the [`simple`] module. Requires enabling the `simple`-feature.
+//! See the [`simple`] module. Requires enabling the `simple` feature.
 //! Handles both editing and release playback use cases using conditional compilation.
 //!
 //! ## Low-level API

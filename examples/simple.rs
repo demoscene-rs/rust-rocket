@@ -61,7 +61,7 @@ fn main() {
             match event {
                 Event::Seek(to) => seek = Some(to),
                 Event::Pause(state) => time_source.pause(state),
-                Event::NotConnected => {
+                Event::NotConnected => /* Alternatively: break the loop here and keep rendering frames */ {
                     std::thread::sleep(Duration::from_millis(10));
                     continue 'main;
                 }
@@ -74,7 +74,7 @@ fn main() {
                 time_source.seek(to);
                 continue;
             }
-            None => rocket.set_time(time),
+            None => rocket.set_time(&time),
         }
 
         // <In a full demo you would render a frame here>

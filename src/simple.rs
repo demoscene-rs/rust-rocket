@@ -2,7 +2,7 @@
 
 //! An opinionated abstraction for the lower level [`client`](crate::client) and [`player`](crate::player) API.
 //!
-//! Requires the `simple`-feature.
+//! Requires the `simple` feature.
 //! All errors are printed to stderr, and the connection to the tracker will be automatically re-established
 //! as long as [`poll_events`](Rocket::poll_events) is called frequently enough.
 //!
@@ -26,8 +26,8 @@
 //!
 //! And build your release accordingly:
 //! ```console
-//! cargo run                                 # Editing without player-feature
-//! cargo build --release --features player   # Release built with player-feature
+//! cargo run                                 # Editing without player feature
+//! cargo build --release --features player   # Release built with player feature
 //! ```
 //!
 //! A main loop may look like this:
@@ -38,7 +38,7 @@
 //! # impl MusicPlayer {
 //! #     fn new() -> Self { Self }
 //! #     fn get_time(&self) -> Duration { Duration::ZERO }
-//! #     fn get_bpm(&self) -> f32 { 0. }
+//! #     fn get_bpm(&self) -> f32 { 120. }
 //! #     fn seek(&self, _to: Duration) {}
 //! #     fn pause(&self, _state: bool) {}
 //! # }
@@ -60,7 +60,7 @@
 //!             match dbg!(event) {
 //!                 Event::Seek(to) => seek = Some(to),
 //!                 Event::Pause(state) => music.pause(state),
-//!                 Event::NotConnected => std::thread::sleep(Duration::from_secs(1)),
+//!                 Event::NotConnected => break,
 //!             }
 //!         }
 //!         // It's recommended to call set_time only when the not seeking.
@@ -70,7 +70,7 @@
 //!                 music.seek(to);
 //!                 continue;
 //!             }
-//!             None => rocket.set_time(time),
+//!             None => rocket.set_time(&time),
 //!         }
 //!
 //!         // Read values with Rocket's get_value function while rendering the frame
@@ -97,10 +97,7 @@
 //! - Sensible error handling that you may want to write anyway if you're not size-restricted.
 
 use bincode::error::{DecodeError, EncodeError};
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{path::Path, time::Duration};
 
 const SECS_PER_MINUTE: f32 = 60.;
 const ROWS_PER_BEAT: f32 = 8.;
@@ -137,10 +134,18 @@ pub enum Event {
     Pause(bool),
     /// The client is not connected. Next call to `poll_events` will attempt a reconnection.
     ///
-    /// A good way to handle this variant is to [`sleep`](std::thread::sleep) for a while and just let your
-    /// [`poll_events`](Rocket::poll_events) loop continue.
-    /// You can also choose to continue your main loop if you have other event sources to poll such as SDL.
-    /// See [module documentation](crate::simple#Examples).
+    /// There are three equally sensible ways to handle this variant:
+    ///
+    /// 1. `break`: End your event polling `while let`-loop and proceed to rendering the frame.
+    ///    All [`Rocket`] methods keep working, but without control from the tracker.
+    /// 2. `continue 'main`: Restart your main loop, don't render the frame.
+    ///    This lets you keep calling other event polling functions from other libraries, e.g. SDL or winit.
+    /// 3. `{}`: Ignore it and let your event polling loop continue.
+    ///
+    /// Options 2 and 3 result is a busy wait, e.g. waste a lot of CPU time.
+    /// It's better to combine them with `std::thread::sleep` for at least a few milliseconds in order to mitigate that.
+    /// 
+    /// See [module documentation](crate::simple#Examples) and [`poll_events`](Rocket::poll_events).
     NotConnected,
 }
 
@@ -149,8 +154,8 @@ pub enum Event {
 /// # Usage
 ///
 /// See [module-level documentation](crate::simple#Usage).
-pub struct Rocket {
-    path: PathBuf,
+pub struct Rocket<P: AsRef<Path>> {
+    path: P,
     bps: f32,
     row: f32,
     #[cfg(not(feature = "player"))]
@@ -165,7 +170,7 @@ pub struct Rocket {
     rocket: crate::RocketPlayer,
 }
 
-impl Rocket {
+impl<P: AsRef<Path>> Rocket<P> {
     /// Initializes rocket.
     ///
     /// # Without `player` feature
@@ -185,9 +190,7 @@ impl Rocket {
     ///
     /// The return value can be handled by calling [`unwrap`](Result::unwrap) if you want to panic,
     /// or [`ok`](Result::ok) if you want to ignore the error and continue without using rocket.
-    pub fn new<P: AsRef<Path>>(path: P, bpm: f32) -> Result<Self, DecodeError> {
-        let path = PathBuf::from(path.as_ref());
-
+    pub fn new(path: P, bpm: f32) -> Result<Self, DecodeError> {
         #[cfg(not(feature = "player"))]
         let rocket = loop {
             match Self::connect() {
@@ -201,7 +204,10 @@ impl Rocket {
             let mut file = match std::fs::File::open(&path) {
                 Ok(file) => file,
                 Err(e) => {
-                    print_msg(PREFIX, &format!("Failed to open {}", path.display()));
+                    print_msg(
+                        PREFIX,
+                        &format!("Failed to open {}", path.as_ref().display()),
+                    );
                     print_errors(PREFIX, &e);
                     return Err(DecodeError::Io {
                         inner: e,
@@ -213,7 +219,10 @@ impl Rocket {
             {
                 Ok(tracks) => tracks,
                 Err(e) => {
-                    print_msg(PREFIX, &format!("Failed to read {}", path.display()));
+                    print_msg(
+                        PREFIX,
+                        &format!("Failed to read {}", path.as_ref().display()),
+                    );
                     print_errors(PREFIX, &e);
                     return Err(e);
                 }
@@ -255,7 +264,11 @@ impl Rocket {
         let track = self.rocket.get_track(track).unwrap_or_else(|| {
             print_msg(
                 PREFIX,
-                &format!("Track {} doesn't exist in {}", track, self.path.display()),
+                &format!(
+                    "Track {} doesn't exist in {}",
+                    track,
+                    self.path.as_ref().display()
+                ),
             );
             panic!("{}: Can't recover", PREFIX);
         });
@@ -264,7 +277,7 @@ impl Rocket {
     }
 
     /// Update rocket with the current time from your time source, e.g. music player.
-    pub fn set_time(&mut self, time: Duration) {
+    pub fn set_time(&mut self, time: &Duration) {
         let beat = time.as_secs_f32() * self.bps;
         self.row = beat * ROWS_PER_BEAT;
 
@@ -297,6 +310,42 @@ impl Rocket {
     ///
     /// The return value can be handled by calling [`unwrap`](Result::unwrap) if you want to panic,
     /// or `.ok().flatten()` if you want to ignore the error and continue.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use std::time::Duration;
+    /// # use rust_rocket::simple::{Rocket, Event};
+    /// # struct MusicPlayer; // Your music player, not included in this crate
+    /// # impl MusicPlayer {
+    /// #     fn new() -> Self { Self }
+    /// #     fn get_time(&self) -> Duration { Duration::ZERO }
+    /// #     fn seek(&self, _to: Duration) {}
+    /// #     fn pause(&self, _state: bool) {}
+    /// # }
+    /// # let music = MusicPlayer::new();
+    /// # let mut rocket = Rocket::new("tracks.bin", 60.).unwrap();
+    /// while let Some(event) = rocket.poll_events().ok().flatten() {
+    ///     match event {
+    ///         Event::Seek(to) => music.seek(to),
+    ///         Event::Pause(state) => music.pause(state),
+    ///         Event::NotConnected => break,
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Tips
+    ///
+    /// There are three sensible ways to handle the `Event::NotConnected` variant:
+    ///
+    /// 1. `break`: End your event polling `while let`-loop and proceed to rendering the frame.
+    ///    All [`Rocket`] methods keep working, but without control from the tracker.
+    /// 2. `continue 'main`: Restart your main loop, don't render the frame.
+    ///    This lets you keep calling other event polling functions from other libraries, e.g. SDL or winit.
+    /// 3. `{}`: Ignore it and let your event polling loop continue.
+    ///
+    /// Options 2 and 3 result is a busy wait, e.g. waste a lot of CPU time.
+    /// It's better to combine them with `std::thread::sleep` for at least a few milliseconds in order to mitigate that.
     ///
     /// # With `player` feature
     ///
@@ -371,7 +420,10 @@ impl Rocket {
             let mut file = match open_result {
                 Ok(file) => file,
                 Err(e) => {
-                    print_msg(PREFIX, &format!("Failed to open {}", self.path.display()));
+                    print_msg(
+                        PREFIX,
+                        &format!("Failed to open {}", self.path.as_ref().display()),
+                    );
                     print_errors(PREFIX, &e);
                     return Err(EncodeError::Io { inner: e, index: 0 });
                 }
@@ -380,13 +432,16 @@ impl Rocket {
             let tracks = self.rocket.save_tracks();
             match bincode::encode_into_std_write(tracks, &mut file, bincode::config::standard()) {
                 Ok(_) => {
-                    print_msg(PREFIX, &format!("Tracks saved to {}", self.path.display()));
+                    print_msg(
+                        PREFIX,
+                        &format!("Tracks saved to {}", self.path.as_ref().display()),
+                    );
                     Ok(())
                 }
                 Err(e) => {
                     print_msg(
                         PREFIX,
-                        &format!("Failed to write to {}", self.path.display()),
+                        &format!("Failed to write to {}", self.path.as_ref().display()),
                     );
                     print_errors(PREFIX, &e);
                     Err(e)
@@ -402,5 +457,37 @@ impl Rocket {
     fn connect() -> Result<crate::RocketClient, crate::client::Error> {
         print_msg(PREFIX, "Connecting...");
         crate::RocketClient::new()
+    }
+}
+
+#[cfg(feature = "player")]
+impl Rocket<&str> {
+    /// An escape hatch constructor for advanced users who want to handle track loading via other means than `File`.
+    ///
+    /// This function is only available when the `player` feature is enabled, so you should not default to using it.
+    ///
+    /// # Usage
+    ///
+    /// The function makes it possible to load from e.g. [`std::include_bytes!`] in release builds.
+    ///
+    /// ```rust,no_run
+    /// # use rust_rocket::simple::Rocket;
+    /// # const SYNC_DATA: &[u8] = &[];
+    /// // const SYNC_DATA: &[u8] = include_bytes!("tracks.bin");
+    ///
+    /// #[cfg(feature = "player")]
+    /// let rocket = Rocket::from_std_read(&mut SYNC_DATA, 120.).unwrap_or_else(|_| unsafe {
+    ///     std::hint::unreachable_unchecked()
+    /// });
+    /// ```
+    pub fn from_std_read<R: std::io::Read>(read: &mut R, bpm: f32) -> Result<Self, DecodeError> {
+        let tracks = bincode::decode_from_std_read(read, bincode::config::standard())?;
+        let rocket = crate::RocketPlayer::new(tracks);
+        Ok(Self {
+            path: "release",
+            bps: bpm / SECS_PER_MINUTE,
+            row: 0.,
+            rocket,
+        })
     }
 }

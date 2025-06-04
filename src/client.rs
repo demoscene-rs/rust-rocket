@@ -274,9 +274,11 @@ impl RocketClient {
                 .map_err(Error::IOError)?;
 
             self.tracks.push(Track::new(name));
-            let track = self.tracks.last_mut().unwrap_or_else(||
-                // SAFETY: tracks cannot be empty, because it was pushed to on the previous line
-                unsafe{ unreachable_unchecked() });
+            // SAFETY: tracks cannot be empty, because it was pushed to on the previous line
+            let track = self
+                .tracks
+                .last_mut()
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             Ok(track)
         }
     }
