@@ -4,6 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Time source.
+///
+/// In a full demo, this represents your music player, but this type only
+/// implements the necessary controls and timing functionality without audio.
 struct TimeSource {
     start: Instant,
     offset: Duration,
@@ -11,7 +15,7 @@ struct TimeSource {
 }
 
 impl TimeSource {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             start: Instant::now(),
             offset: Duration::from_secs(0),
@@ -19,7 +23,7 @@ impl TimeSource {
         }
     }
 
-    fn get_time(&self) -> Duration {
+    pub fn get_time(&self) -> Duration {
         if self.paused {
             self.offset
         } else {
@@ -27,13 +31,13 @@ impl TimeSource {
         }
     }
 
-    fn pause(&mut self, state: bool) {
+    pub fn pause(&mut self, state: bool) {
         self.offset = self.get_time();
         self.start = Instant::now();
         self.paused = state;
     }
 
-    fn seek(&mut self, to: Duration) {
+    pub fn seek(&mut self, to: Duration) {
         self.offset = to;
         self.start = Instant::now();
     }
@@ -42,6 +46,7 @@ impl TimeSource {
 fn main() {
     let mut rocket = Rocket::new("tracks.bin", 60.).unwrap();
     let mut time_source = TimeSource::new();
+    let mut previous_time = Duration::ZERO;
 
     loop {
         // Get current frame's time
@@ -49,7 +54,6 @@ fn main() {
 
         // Keep the rocket tracker in sync.
         // It's recommended to combine consecutive seek events to a single seek.
-        // This ensures the smoothest scrolling in editor.
         let mut seek = None;
         while let Some(event) = rocket.poll_events().ok().flatten() {
             match dbg!(event) {
@@ -57,7 +61,8 @@ fn main() {
                 Event::Pause(state) => time_source.pause(state),
             }
         }
-        // It's recommended to call set_time only when the not seeking.
+        // It's recommended to call set_time only when necessary.
+        // This ensures the smoothest scrolling in the editor.
         match seek {
             Some(to) => {
                 time_source.seek(to);
@@ -66,8 +71,13 @@ fn main() {
             None => rocket.set_time(time),
         }
 
-        // Render your production here
-        println!("{:?}: test = {}", time, rocket.get_value("test"));
+        // In a full demo you would render a frame here
+
+        // Filter redundant output
+        if time != previous_time {
+            println!("{:?}: test = {}", time, rocket.get_value("test"));
+        }
+        previous_time = time;
         thread::sleep(Duration::from_millis(10));
     }
 }

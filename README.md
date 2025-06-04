@@ -6,7 +6,12 @@ Rust Rocket
 A rust implementation of the client library of GNU Rocket.
 
 Basic examples can be found in [examples](examples).
-Open a Rocket tracker and try `cargo run --features simple --example simple`
+
+To get started, you can use the template provided in [examples/simple.rs](examples/simple.rs).
+To run the `simple` example, open a Rocket tracker and try
+```console
+cargo run --features simple --example simple
+```
 
 Features and MSRV
 =================

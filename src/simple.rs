@@ -145,6 +145,8 @@ pub struct Rocket {
     bps: f32,
     row: f32,
     #[cfg(not(feature = "player"))]
+    sent_row: u32,
+    #[cfg(not(feature = "player"))]
     connected: bool,
     #[cfg(not(feature = "player"))]
     rocket: crate::RocketClient,
@@ -208,6 +210,8 @@ impl Rocket {
             bps: bpm / SECS_PER_MINUTE,
             row: 0.,
             #[cfg(not(feature = "player"))]
+            sent_row: 0,
+            #[cfg(not(feature = "player"))]
             connected: true,
             rocket,
         })
@@ -255,10 +259,14 @@ impl Rocket {
         self.row = beat * ROWS_PER_BEAT;
 
         #[cfg(not(feature = "player"))]
-        if self.connected {
-            while let Err(ref e) = self.rocket.set_row(self.row as u32) {
-                print_errors(PREFIX, e);
-                self.connected = false;
+        {
+            let row = self.row as u32;
+            if self.connected && row != self.sent_row {
+                while let Err(ref e) = self.rocket.set_row(row) {
+                    print_errors(PREFIX, e);
+                    self.connected = false;
+                }
+                self.sent_row = row;
             }
         }
     }
