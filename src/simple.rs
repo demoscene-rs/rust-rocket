@@ -52,7 +52,7 @@
 //!     loop {
 //!         // Handle events from the rocket tracker
 //!         while let Some(event) = rocket.poll_events().ok().flatten() {
-//!             match dbg!(event) {
+//!             match event {
 //!                 Event::Seek(to) => music.seek(to),
 //!                 Event::Pause(state) => music.pause(state),
 //!                 Event::NotConnected => break,
