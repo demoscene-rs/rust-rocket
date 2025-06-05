@@ -46,44 +46,36 @@ impl TimeSource {
 fn main() {
     let mut rocket = Rocket::new("tracks.bin", 60.).unwrap();
     let mut time_source = TimeSource::new();
-    let mut previous_time = Duration::ZERO;
+    let mut previous_print_time = Duration::ZERO;
 
     'main: loop {
-        // <Handle other event sources such as SDL here>
+        // <Handle other event sources such as SDL or winit here>
 
-        // Get current frame's time
-        let time = time_source.get_time();
-
-        // Keep the rocket tracker in sync.
-        // It's recommended to combine consecutive seek events to a single seek.
-        let mut seek = None;
+        // Handle events from the rocket tracker
         while let Some(event) = rocket.poll_events().ok().flatten() {
             match event {
-                Event::Seek(to) => seek = Some(to),
+                Event::Seek(to) => time_source.seek(to),
                 Event::Pause(state) => time_source.pause(state),
-                Event::NotConnected => /* Alternatively: break the loop here and keep rendering frames */ {
+                Event::NotConnected =>
+                /* Alternatively: break the loop here and keep rendering frames */
+                {
                     std::thread::sleep(Duration::from_millis(10));
                     continue 'main;
                 }
             }
         }
-        // It's recommended to call set_time only when necessary.
-        // This ensures the smoothest scrolling in the editor.
-        match seek {
-            Some(to) => {
-                time_source.seek(to);
-                continue;
-            }
-            None => rocket.set_time(&time),
-        }
+
+        // Get current frame's time and keep the tracker updated
+        let time = time_source.get_time();
+        rocket.set_time(&time);
 
         // <In a full demo you would render a frame here>
 
         // Filter redundant output
-        if time != previous_time {
+        if time != previous_print_time {
             println!("{:?}: test = {}", time, rocket.get_value("test"));
         }
-        previous_time = time;
+        previous_print_time = time;
         thread::sleep(Duration::from_millis(10));
     }
 }

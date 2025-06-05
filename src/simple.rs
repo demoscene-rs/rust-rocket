@@ -50,28 +50,18 @@
 //!     // Create window, render resources etc...
 //!
 //!     loop {
-//!         // Get current frame's time
-//!         let time = music.get_time();
-//!
-//!         // Keep the rocket tracker in sync.
-//!         // It's recommended to combine consecutive seek events to a single seek.
-//!         let mut seek = None;
+//!         // Handle events from the rocket tracker
 //!         while let Some(event) = rocket.poll_events().ok().flatten() {
 //!             match dbg!(event) {
-//!                 Event::Seek(to) => seek = Some(to),
+//!                 Event::Seek(to) => music.seek(to),
 //!                 Event::Pause(state) => music.pause(state),
 //!                 Event::NotConnected => break,
 //!             }
 //!         }
-//!         // It's recommended to call set_time only when the not seeking.
-//!         // This ensures the smoothest scrolling in editor.
-//!         match seek {
-//!             Some(to) => {
-//!                 music.seek(to);
-//!                 continue;
-//!             }
-//!             None => rocket.set_time(&time),
-//!         }
+//!
+//!         // Get current frame's time and keep the tracker updated
+//!         let time = music.get_time();
+//!         rocket.set_time(&time);
 //!
 //!         // Read values with Rocket's get_value function while rendering the frame
 //!         let _ = rocket.get_value("track0");
@@ -132,7 +122,8 @@ pub enum Event {
     Seek(Duration),
     /// The tracker pauses or unpauses.
     Pause(bool),
-    /// The client is not connected. Next call to `poll_events` will attempt a reconnection.
+    /// The client is not connected. Next calls to [`poll_events`](Rocket::poll_events) will eventually attempt to
+    /// reconnect.
     ///
     /// There are three equally sensible ways to handle this variant:
     ///
@@ -144,8 +135,8 @@ pub enum Event {
     ///
     /// Options 2 and 3 result is a busy wait, e.g. waste a lot of CPU time.
     /// It's better to combine them with `std::thread::sleep` for at least a few milliseconds in order to mitigate that.
-    /// 
-    /// See [module documentation](crate::simple#Examples) and [`poll_events`](Rocket::poll_events).
+    ///
+    /// See `simple.rs` in the `examples`-directory.
     NotConnected,
 }
 
@@ -153,13 +144,13 @@ pub enum Event {
 ///
 /// # Usage
 ///
-/// See [module-level documentation](crate::simple#Usage).
+/// See [module documentation](crate::simple#Usage).
 pub struct Rocket<P: AsRef<Path>> {
     path: P,
     bps: f32,
     row: f32,
     #[cfg(not(feature = "player"))]
-    sent_row: u32,
+    tracker_row: u32,
     #[cfg(not(feature = "player"))]
     connected: bool,
     #[cfg(not(feature = "player"))]
@@ -175,7 +166,7 @@ impl<P: AsRef<Path>> Rocket<P> {
     ///
     /// # Without `player` feature
     ///
-    /// Attemps to connect to a rocket tracker, and retries indefinitely every 1s if connection can't be established,
+    /// Attempts to connect to a rocket tracker, and retries indefinitely every 1s if connection can't be established,
     /// during which the function doesn't return and the caller is **blocked**.
     ///
     /// # With `player` feature
@@ -235,7 +226,7 @@ impl<P: AsRef<Path>> Rocket<P> {
             bps: bpm / SECS_PER_MINUTE,
             row: 0.,
             #[cfg(not(feature = "player"))]
-            sent_row: 0,
+            tracker_row: 0,
             #[cfg(not(feature = "player"))]
             connected: true,
             #[cfg(not(feature = "player"))]
@@ -284,12 +275,14 @@ impl<P: AsRef<Path>> Rocket<P> {
         #[cfg(not(feature = "player"))]
         {
             let row = self.row as u32;
-            if self.connected && row != self.sent_row {
-                while let Err(ref e) = self.rocket.set_row(row) {
-                    print_errors(PREFIX, e);
-                    self.connected = false;
+            if self.connected && row != self.tracker_row {
+                match self.rocket.set_row(row) {
+                    Ok(()) => self.tracker_row = row,
+                    Err(ref e) => {
+                        print_errors(PREFIX, e);
+                        self.connected = false;
+                    }
                 }
-                self.sent_row = row;
             }
         }
     }
@@ -371,6 +364,7 @@ impl<P: AsRef<Path>> Rocket<P> {
                 Ok(Some(event)) => {
                     let handled = match event {
                         crate::client::Event::SetRow(row) => {
+                            self.tracker_row = row;
                             let beat = row as f32 / ROWS_PER_BEAT;
                             Event::Seek(Duration::from_secs_f32(beat / self.bps))
                         }

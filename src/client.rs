@@ -63,25 +63,23 @@
 //!         let time = music.get_time();
 //!         let row = time_to_row(time);
 //!
-//!         // Keep the rocket tracker in sync
-//!         // It's recommended to combine consecutive seek events to a single seek.
+//!         // Keep the rocket tracker in sync.
+//!         // When using the low level API, it's recommended to combine consecutive seek events to a single seek.
 //!         // This ensures the smoothest scrolling in editor.
 //!         let mut seek = None;
 //!         while let Some(event) = rocket.poll_events()? {
 //!             match event {
 //!                 Event::SetRow(to) => seek = Some(to),
 //!                 Event::Pause(state) => music.pause(state),
-//!                 Event::SaveTracks => {/* Call save_tracks and serialize to a file */}
+//!                 Event::SaveTracks => {/* Call save_tracks and write to a file */}
 //!             }
 //!         }
-//!         // It's recommended to call set_time only when the not seeking.
-//!         match seek {
-//!             Some(to_row) => {
-//!                 music.seek(row_to_time(to_row));
-//!                 continue;
-//!             }
-//!             None => rocket.set_row(row as u32)?,
+//!         // When using the low level API, it's recommended to call set_time only when the not seeking.
+//!         if let Some(seek) = seek {
+//!             music.seek(row_to_time(seek));
+//!             continue;
 //!         }
+//!         rocket.set_row(row as u32)?;
 //!
 //!         // Render frame and read values with Track's get_value function
 //!         let _ = get(&mut rocket, "track0", row);
