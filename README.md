@@ -5,12 +5,10 @@ Rust Rocket
 
 A rust implementation of the client library of GNU Rocket.
 
-Basic examples can be found in [examples](examples).
-
 To get started, you can use the template provided in [examples/simple.rs](examples/simple.rs).
 To run the `simple` example, open a Rocket tracker and try
 ```console
-cargo run --features simple --example simple
+cargo run --features bincode,client --example simple
 ```
 
 Features and MSRV
@@ -25,7 +23,7 @@ rust-rocket = { version = "0", features = ["bincode"] }
 ```
 
 The minimum supported Rust version (MSRV) without any optional features is 1.61.
-The `bincode` feature (enabled by `simple`) requires Rust 1.85.
+The `bincode` feature requires Rust 1.85.
 
 Links
 =====

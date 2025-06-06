@@ -9,7 +9,7 @@
 //! or [emoon's OpenGL-based editor](https://github.com/emoon/rocket)).
 //!
 //! The [`Rocket`] type in this module compiles to different code depending on crate feature `client`.
-//! When the feature is enabled, the [`Rocket`] type uses [`Client`](crate::lowlevel::client::Client) internally.
+//! When the feature is enabled, the [`Rocket`] type connects to a rocket tracker when possible.
 //! Otherwise [`Rocket`] only plays back [`Tracks`] that you construct it with.
 //!
 //! Configure the feature in your production's Cargo.toml:
@@ -25,7 +25,7 @@
 //! And build your release accordingly:
 //! ```console
 //! cargo run                                      # Editing with the client feature
-//! cargo build --release --no-default-features    # Release built without client feature
+//! cargo build --release --no-default-features    # Build a release without client feature
 //! ```
 //!
 //! A main loop may look like this:
@@ -104,7 +104,7 @@ pub enum Event {
     Seek(Duration),
     /// The tracker pauses or unpauses.
     Pause(bool),
-    /// The tracker asks you to export tracks to a file.
+    /// The tracker asks you to export tracks.
     SaveTracks,
     /// The client is not connected. Next calls to [`poll_events`](Rocket::poll_events) will eventually attempt to
     /// reconnect.
@@ -120,7 +120,8 @@ pub enum Event {
     /// Options 2 and 3 result is a busy wait, e.g. waste a lot of CPU time.
     /// It's better to combine them with `std::thread::sleep` for at least a few milliseconds in order to mitigate that.
     ///
-    /// See `simple.rs` in the `examples`-directory.
+    /// See [`simple.rs`](https://github.com/demoscene-rs/rust-rocket/blob/master/examples/simple.rs) in the
+    /// `examples`-directory.
     NotConnected,
 }
 
@@ -128,7 +129,7 @@ pub enum Event {
 ///
 /// # Usage
 ///
-/// See [module documentation](crate::simple#Usage).
+/// See [module documentation](crate::rocket#Usage).
 pub struct Rocket {
     bps: f32,
     row: f32,
@@ -144,22 +145,9 @@ pub struct Rocket {
 impl Rocket {
     /// Initializes rocket.
     ///
-    /// # Without `player` feature
+    /// # When the `client` feature is enabled
     ///
     /// Attempts to connect to a rocket tracker.
-    ///
-    /// # With `player` feature
-    ///
-    /// Loads tracks from file specified by `path` using [`bincode`].
-    ///
-    /// # Errors
-    ///
-    /// Any errors that occur are first printed to stderr, then returned to the caller.
-    ///
-    /// An error is returned If the file specified by `path` cannot be read or its contents cannot be decoded.
-    ///
-    /// The return value can be handled by calling [`unwrap`](Result::unwrap) if you want to panic,
-    /// or [`ok`](Result::ok) if you want to ignore the error and continue without using rocket.
     pub fn new(tracks: Tracks, bpm: f32) -> Self {
         #[cfg(feature = "client")]
         let client = Self::connect().ok();
@@ -177,12 +165,12 @@ impl Rocket {
         }
     }
 
-    /// Get value based on previous call to [`set_time`](Self::set_time), by track name.
+    /// Get track value based on previous call to [`set_time`](Self::set_time).
     ///
     /// # Panics
     ///
-    /// With `player` feature: if the file specified in call to [`new`](Self::new) doesn't contain track with `name`,
-    /// the function handles the error by printing to stderr and panicking.
+    /// If the `client` feature is not enabled and the `tracks` passed to [`Rocket::new`] don't contain a track
+    /// with `name`, the function handles the error by printing to stderr and panicking.
     pub fn get_value(&mut self, track: &str) -> f32 {
         #[cfg(feature = "client")]
         let track = match &mut self.client {
@@ -322,6 +310,12 @@ impl Rocket {
         None
     }
 
+    /// Get a reference to current [`Tracks`] state.
+    ///
+    /// [`Tracks`] can be serialized and written to a file when the `serde` or
+    /// `bincode` features are enabled.
+    /// See [`examples/simple.rs`](https://github.com/demoscene-rs/rust-rocket/blob/master/examples/simple.rs) for an
+    /// example.
     pub fn get_tracks(&self) -> &Tracks {
         &self.tracks
     }

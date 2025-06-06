@@ -157,8 +157,7 @@ pub enum Event {
     SetRow(u32),
     /// The tracker pauses or unpauses.
     Pause(bool),
-    /// The tracker asks us to save our track data.
-    /// You may want to call [`Client::save_tracks`] after receiving this event.
+    /// The tracker asks you to export the track data.
     SaveTracks,
 }
 

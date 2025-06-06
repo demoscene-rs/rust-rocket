@@ -55,7 +55,7 @@ fn save_tracks(tracks: &Tracks) {
 }
 
 fn main() {
-    // Load tracks if necessary
+    // Load tracks if not acting as a rocket client
     let tracks: Tracks = if cfg!(feature = "client") {
         Tracks::default()
     } else {

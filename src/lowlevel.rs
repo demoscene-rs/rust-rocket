@@ -1,9 +1,15 @@
+//! Low level API.
+//!
+//! This module contains the implementation for a rocket [`client`], [`interpolation`] and [`track`]s.
+//! See each module for their respective documentation.
+
 pub mod client;
 pub mod interpolation;
 pub mod track;
 
 use track::Track;
 
+/// A collection of [`Track`]s. To construct this type manually, use [`Tracks::default`] or [`Tracks::from`].
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 #[derive(Default, Clone)]
@@ -18,17 +24,15 @@ impl Tracks {
     pub fn get_track(&self, name: &str) -> Option<&Track> {
         self.inner.iter().find(|t| t.get_name() == name)
     }
+
+    /// Provides read only access to [`Track`]s within.
+    pub fn as_slice(&self) -> &[Track] {
+        self.inner.as_slice()
+    }
 }
 
 impl From<Vec<Track>> for Tracks {
     fn from(value: Vec<Track>) -> Self {
         Self { inner: value }
-    }
-}
-
-/// Provides public read only access
-impl AsRef<[Track]> for Tracks {
-    fn as_ref(&self) -> &[Track] {
-        self.inner.as_slice()
     }
 }
