@@ -68,7 +68,8 @@
 //! }
 //! ```
 //!
-//! For a more thorough example, see `examples/simple.rs`.
+//! For a more thorough example,
+//! see [`examples/simple.rs`](https://github.com/demoscene-rs/rust-rocket/blob/master/examples/simple.rs).
 //!
 //! **Caution**: reconnection will wipe track state. Make sure to use the save feature in the editor!
 
@@ -223,7 +224,7 @@ impl Rocket {
     ///
     /// # When the `client` feature is enabled
     ///
-    /// This polls from events from the tracker.
+    /// This polls events from the tracker.
     /// You should call this at least once per frame.
     /// It is recommended to keep calling this in a `while` loop until you receive `Ok(None)`.
     ///
