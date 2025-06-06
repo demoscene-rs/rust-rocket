@@ -1,5 +1,6 @@
-use rust_rocket::simple::{Event, Rocket};
+use rust_rocket::{Event, Rocket, Tracks};
 use std::{
+    fs::{File, OpenOptions},
     thread,
     time::{Duration, Instant},
 };
@@ -43,8 +44,27 @@ impl TimeSource {
     }
 }
 
+fn save_tracks(tracks: &Tracks) {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("tracks.bin")
+        .unwrap();
+    bincode::encode_into_std_write(tracks, &mut file, bincode::config::standard()).unwrap();
+}
+
 fn main() {
-    let mut rocket = Rocket::new("tracks.bin", 60.).unwrap();
+    // Load tracks if necessary
+    let tracks: Tracks = if cfg!(feature = "client") {
+        Tracks::default()
+    } else {
+        let mut file = File::open("tracks.bin").unwrap();
+        bincode::decode_from_std_read(&mut file, bincode::config::standard()).unwrap()
+    };
+
+    // Initialize rocket and time source
+    let mut rocket = Rocket::new(tracks, 60.);
     let mut time_source = TimeSource::new();
     let mut previous_print_time = Duration::ZERO;
 
@@ -52,10 +72,11 @@ fn main() {
         // <Handle other event sources such as SDL or winit here>
 
         // Handle events from the rocket tracker
-        while let Some(event) = rocket.poll_events().ok().flatten() {
+        while let Some(event) = rocket.poll_events() {
             match event {
                 Event::Seek(to) => time_source.seek(to),
                 Event::Pause(state) => time_source.pause(state),
+                Event::SaveTracks => save_tracks(rocket.get_tracks()),
                 Event::NotConnected =>
                 /* Alternatively: break the loop here and keep rendering frames */
                 {

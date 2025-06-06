@@ -34,12 +34,12 @@ impl Interpolation {
     /// # Examples
     ///
     /// ```
-    /// # use rust_rocket::interpolation::Interpolation;
+    /// # use rust_rocket::lowlevel::interpolation::Interpolation;
     /// assert_eq!(Interpolation::Linear.interpolate(0.5), 0.5);
     /// ```
     ///
     /// ```
-    /// # use rust_rocket::interpolation::Interpolation;
+    /// # use rust_rocket::lowlevel::interpolation::Interpolation;
     /// assert_eq!(Interpolation::Step.interpolate(0.5), 0.);
     /// ```
     pub fn interpolate(&self, t: f32) -> f32 {

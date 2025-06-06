@@ -1,6 +1,6 @@
 [package]
 name = "rust-rocket"
-version = "0.14.0"
+version = "0.15.0"
 authors = [
   "Tim Peters <mail@darksecond.nl>",
   "Lauri Gustafsson <lauri.gustafsson@iki.fi>",
@@ -17,8 +17,7 @@ rust-version = "1.61"
 all-features = true
 
 [features]
-simple = ["bincode"] # Enables the simple API
-player = ["simple"]  # Makes the simple API behave as a file player, not a client
+client = [] # Makes the API behave as a client, not a player
 
 [dependencies]
 byteorder = "1"
@@ -27,13 +26,5 @@ serde = { version = "1", features = ["derive"], optional = true }
 bincode = { version = "2", features = ["derive"], optional = true }
 
 [[example]]
-name = "edit"
-required-features = ["bincode"]
-
-[[example]]
-name = "play"
-required-features = ["bincode"]
-
-[[example]]
 name = "simple"
-required-features = ["simple"]
+required-features = ["bincode"]

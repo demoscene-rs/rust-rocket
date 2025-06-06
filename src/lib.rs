@@ -1,18 +1,16 @@
 //! This crate implements a client library and a player for the [rocket sync tracker](https://github.com/rocket/rocket).
 //! You can connect to a rocket tracker, get values from tracks, and live-edit your production.
 //!
-//! **There are two alternative APIs in this crate:**
+//! # Usage
 //!
-//! ## Simple API
+//! See the [`rocket`] module.
 //!
-//! See the [`simple`] module. Requires enabling the `simple` feature.
-//! Handles both editing and release playback use cases using conditional compilation.
+//! # Low-level API
 //!
-//! ## Low-level API
+//! Most of the crate implementation is public in the [`lowlevel`] module.
+//! It's not recommended to use the low level API directly, use [`rocket`] instead.
 //!
-//! The [`client`] module contains the types which you need to connect to a Rocket tracker and edit your production.
-//!
-//! The [`player`] module contains a player which you can use when building your production in release mode.
+//! The [`lowlevel::client`] module contains the types which you need to connect to a Rocket tracker.
 //!
 //! # Features
 //!
@@ -20,23 +18,16 @@
 //! | ---       | ---                                                                               |
 //! | `serde`   | Derive [serde](https://crates.io/crates/serde)'s traits on the [`Track`]-type     |
 //! | `bincode` | Derive [bincode](https://crates.io/crates/bincode)'s traits on the [`Track`]-type |
-//! | `simple`  | Enables the [`simple`] API                                                        |
-//! | `player`  | Builds the [`simple`] API in file player mode instead of client mode              |
+//! | `client`  | Enables the rocket client, making it possible to connect to a tracker             |
 //!
 //! All features are mutually compatible, but if you choose to use `bincode` as your serialization library,
 //! you don't need to use `serde`.
 //!
-//! The `simple` feature enables `bincode`.
+//! Omitting the `client` feature makes the crate function as a player for [`Tracks`], which you can load from a file
+//! using the `serde` or `bincode` features. See `examples/simple.rs`.
 
-pub mod client;
-pub mod interpolation;
-pub mod player;
-pub mod simple;
-pub mod track;
+pub mod lowlevel;
+pub mod rocket;
 
-pub use client::RocketClient;
-pub use player::RocketPlayer;
-pub use track::Track;
-
-/// Produced by [`RocketClient::save_tracks`] and consumed by [`RocketPlayer::new`]
-pub type Tracks = Vec<Track>;
+pub use lowlevel::Tracks;
+pub use rocket::{Event, Rocket};

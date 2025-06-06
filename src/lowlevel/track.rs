@@ -1,6 +1,6 @@
 //! [`Key`] and [`Track`] types.
 
-use crate::interpolation::*;
+use super::interpolation::*;
 
 /// The `Key` Type.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

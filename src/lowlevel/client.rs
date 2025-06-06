@@ -1,4 +1,5 @@
-//! Main client code, including the [`RocketClient`] type.
+#![cfg(feature = "client")]
+//! Main client code, including the [`Client`] type.
 //!
 //! # Usage
 //!
@@ -6,10 +7,10 @@
 //!
 //! 0. Install a rocket tracker ([original Qt editor](https://github.com/rocket/rocket)
 //!    or [emoon's OpenGL-based editor](https://github.com/emoon/rocket))
-//! 1. Connect the [`RocketClient`] to the running tracker by calling [`RocketClient::new`]
-//! 2. Create tracks with [`get_track_mut`](RocketClient::get_track_mut)
-//! 3. In your main loop, poll for updates from the Rocket tracker by calling [`poll_events`](RocketClient::poll_events).
-//! 4. Keep the tracker in sync by calling [`set_row`](RocketClient::set_row) (see tips below)
+//! 1. Connect the [`Client`] to the running tracker by calling [`Client::new`]
+//! 2. Create tracks with [`get_track_mut`](Client::get_track_mut)
+//! 3. In your main loop, poll for updates from the Rocket tracker by calling [`poll_events`](Client::poll_events).
+//! 4. Keep the tracker in sync by calling [`set_row`](Client::set_row) (see tips below)
 //! 5. Get values from the tracks with [`Track::get_value`]
 //!
 //! See the linked documentation items and the examples-directory for more examples.
@@ -22,7 +23,8 @@
 //!
 //! ```rust,no_run
 //! # use std::time::Duration;
-//! # use rust_rocket::client::{RocketClient, Event, Error};
+//! # use rust_rocket::lowlevel::client::{Client, Event, Error};
+//! # use rust_rocket::Tracks;
 //! struct MusicPlayer; // Your music player, not included in this crate
 //! # impl MusicPlayer {
 //! #     fn new() -> Self { Self }
@@ -47,14 +49,15 @@
 //!     Duration::from_secs_f32(secs)
 //! }
 //!
-//! fn get(rocket: &mut RocketClient, track: &str, row: f32) -> f32 {
-//!     let track = rocket.get_track_mut(track).unwrap();
+//! fn get(rocket: &mut Client, tracks: &mut Tracks, track: &str, row: f32) -> f32 {
+//!     let track = rocket.get_track_mut(tracks, track).unwrap();
 //!     track.get_value(row)
 //! }
 //!
 //! fn main() -> Result<(), Error> {
 //!     let mut music = MusicPlayer::new(/* ... */);
-//!     let mut rocket = RocketClient::new()?;
+//!     let mut tracks = Tracks::default();
+//!     let mut rocket = Client::new()?;
 //!
 //!     // Create window, render resources etc...
 //!
@@ -67,11 +70,11 @@
 //!         // When using the low level API, it's recommended to combine consecutive seek events to a single seek.
 //!         // This ensures the smoothest scrolling in editor.
 //!         let mut seek = None;
-//!         while let Some(event) = rocket.poll_events()? {
+//!         while let Some(event) = rocket.poll_events(&mut tracks)? {
 //!             match event {
 //!                 Event::SetRow(to) => seek = Some(to),
 //!                 Event::Pause(state) => music.pause(state),
-//!                 Event::SaveTracks => {/* Call save_tracks and write to a file */}
+//!                 Event::SaveTracks => {/* Call and write to a file */}
 //!             }
 //!         }
 //!         // When using the low level API, it's recommended to call set_time only when the not seeking.
@@ -82,13 +85,13 @@
 //!         rocket.set_row(row as u32)?;
 //!
 //!         // Render frame and read values with Track's get_value function
-//!         let _ = get(&mut rocket, "track0", row);
+//!         let _ = get(&mut rocket, &mut tracks, "track0", row);
 //!     }
 //! }
 //! ```
-use crate::interpolation::*;
-use crate::track::*;
-use crate::Tracks;
+use super::interpolation::*;
+use super::track::*;
+use super::Tracks;
 
 use byteorder::ByteOrder;
 use byteorder::{BigEndian, ReadBytesExt};
@@ -155,7 +158,7 @@ pub enum Event {
     /// The tracker pauses or unpauses.
     Pause(bool),
     /// The tracker asks us to save our track data.
-    /// You may want to call [`RocketClient::save_tracks`] after receiving this event.
+    /// You may want to call [`Client::save_tracks`] after receiving this event.
     SaveTracks,
 }
 
@@ -166,17 +169,16 @@ enum ReceiveResult {
     Incomplete,
 }
 
-/// The `RocketClient` type. This contains the connected socket and other fields.
+/// The `Client` type. This contains the connected socket and other fields.
 #[derive(Debug)]
-pub struct RocketClient {
+pub struct Client {
     stream: TcpStream,
     state: ClientState,
     cmd: Vec<u8>,
-    tracks: Vec<Track>,
 }
 
-impl RocketClient {
-    /// Construct a new RocketClient.
+impl Client {
+    /// Construct a new Client.
     ///
     /// This constructs a new Rocket client and connects to localhost on port 1338.
     ///
@@ -188,15 +190,15 @@ impl RocketClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::RocketClient;
-    /// let mut rocket = RocketClient::new()?;
-    /// # Ok::<(), rust_rocket::client::Error>(())
+    /// # use rust_rocket::lowlevel::client::Client;
+    /// let mut rocket = Client::new()?;
+    /// # Ok::<(), rust_rocket::lowlevel::client::Error>(())
     /// ```
     pub fn new() -> Result<Self, Error> {
         Self::connect(("localhost", 1338))
     }
 
-    /// Construct a new RocketClient.
+    /// Construct a new Client.
     ///
     /// This constructs a new Rocket client and connects to a specified host and port.
     ///
@@ -208,9 +210,9 @@ impl RocketClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::RocketClient;
-    /// let mut rocket = RocketClient::connect(("localhost", 1338))?;
-    /// # Ok::<(), rust_rocket::client::Error>(())
+    /// # use rust_rocket::lowlevel::client::Client;
+    /// let mut rocket = Client::connect(("localhost", 1338))?;
+    /// # Ok::<(), rust_rocket::lowlevel::client::Error>(())
     /// ```
     pub fn connect(addr: impl ToSocketAddrs) -> Result<Self, Error> {
         let stream = TcpStream::connect(addr).map_err(Error::Connect)?;
@@ -219,7 +221,6 @@ impl RocketClient {
             stream,
             state: ClientState::New,
             cmd: Vec::new(),
-            tracks: Vec::new(),
         };
 
         rocket.handshake()?;
@@ -247,20 +248,27 @@ impl RocketClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::RocketClient;
-    /// # let mut rocket = RocketClient::new()?;
-    /// let track = rocket.get_track_mut("namespace:track")?;
+    /// # use rust_rocket::Tracks;
+    /// # use rust_rocket::lowlevel::client::Client;
+    /// let mut tracks = Tracks::default();
+    /// let mut rocket = Client::new()?;
+    ///
+    /// let track = rocket.get_track_mut(&mut tracks, "namespace:track")?;
     /// track.get_value(3.5);
-    /// # Ok::<(), rust_rocket::client::Error>(())
+    /// # Ok::<(), rust_rocket::lowlevel::client::Error>(())
     /// ```
-    pub fn get_track_mut(&mut self, name: &str) -> Result<&mut Track, Error> {
-        if let Some((i, _)) = self
-            .tracks
+    pub fn get_track_mut<'tracks>(
+        &mut self,
+        tracks: &'tracks mut Tracks,
+        name: &str,
+    ) -> Result<&'tracks mut Track, Error> {
+        if let Some((i, _)) = tracks
+            .inner
             .iter()
             .enumerate()
             .find(|(_, t)| t.get_name() == name)
         {
-            Ok(&mut self.tracks[i])
+            Ok(&mut tracks.inner[i])
         } else {
             // Send GET_TRACK message
             let mut buf = [GET_TRACK; 1 + GET_TRACK_LEN];
@@ -271,55 +279,14 @@ impl RocketClient {
                 .write_all(name.as_bytes())
                 .map_err(Error::IOError)?;
 
-            self.tracks.push(Track::new(name));
+            tracks.inner.push(Track::new(name));
             // SAFETY: tracks cannot be empty, because it was pushed to on the previous line
-            let track = self
-                .tracks
+            let track = tracks
+                .inner
                 .last_mut()
                 .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             Ok(track)
         }
-    }
-
-    /// Get track by name.
-    ///
-    /// You should use [`get_track_mut`](RocketClient::get_track_mut) to create a track.
-    pub fn get_track(&self, name: &str) -> Option<&Track> {
-        self.tracks.iter().find(|t| t.get_name() == name)
-    }
-
-    /// Get a snapshot of the tracks in the session.
-    ///
-    /// The returned [`Tracks`] can be dumped to a file in any [supported format](crate#features).
-    /// The counterpart to this function is [`RocketPlayer::new`](crate::RocketPlayer::new),
-    /// which loads tracks for playback.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// # use rust_rocket::RocketClient;
-    /// # use std::fs::OpenOptions;
-    /// let mut rocket = RocketClient::new()?;
-    ///
-    /// // Create tracks, call poll_events, etc...
-    ///
-    /// // Open a file for writing
-    /// let mut file = OpenOptions::new()
-    ///     .write(true)
-    ///     .create(true)
-    ///     .truncate(true)
-    ///     .open("tracks.bin")
-    ///     .expect("Failed to open tracks.bin for writing");
-    ///
-    /// // Save a snapshot of the client to a file for playback in release builds
-    /// let tracks = rocket.save_tracks();
-    /// # #[cfg(feature = "bincode")]
-    /// bincode::encode_into_std_write(tracks, &mut file, bincode::config::standard())
-    ///     .expect("Failed to encode tracks.bin");
-    /// # Ok::<(), rust_rocket::client::Error>(())
-    /// ```
-    pub fn save_tracks(&self) -> &Tracks {
-        &self.tracks
     }
 
     /// Send a SetRow message.
@@ -349,19 +316,21 @@ impl RocketClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use rust_rocket::RocketClient;
-    /// # let mut rocket = RocketClient::new()?;
-    /// while let Some(event) = rocket.poll_events()? {
+    /// # use rust_rocket::Tracks;
+    /// # use rust_rocket::lowlevel::client::Client;
+    /// let mut tracks = Tracks::default();
+    /// let mut rocket = Client::new()?;
+    /// while let Some(event) = rocket.poll_events(&mut tracks)? {
     ///     match event {
     ///         // Do something with the various events.
     ///         _ => (),
     ///     }
     /// }
-    /// # Ok::<(), rust_rocket::client::Error>(())
+    /// # Ok::<(), rust_rocket::lowlevel::client::Error>(())
     /// ```
-    pub fn poll_events(&mut self) -> Result<Option<Event>, Error> {
+    pub fn poll_events(&mut self, tracks: &mut Tracks) -> Result<Option<Event>, Error> {
         loop {
-            match self.poll_event()? {
+            match self.poll_event(tracks)? {
                 ReceiveResult::None => return Ok(None),
                 ReceiveResult::Incomplete => { /* Keep reading */ }
                 ReceiveResult::Some(event) => return Ok(Some(event)),
@@ -369,11 +338,13 @@ impl RocketClient {
         }
     }
 
-    fn poll_event(&mut self) -> Result<ReceiveResult, Error> {
+    fn poll_event(&mut self, tracks: &mut Tracks) -> Result<ReceiveResult, Error> {
         match self.state {
             ClientState::New => self.poll_event_new(),
             ClientState::Incomplete(bytes) => self.poll_event_incomplete(bytes),
-            ClientState::Complete => Ok(self.process_event().unwrap_or_else(|_| unreachable!())),
+            ClientState::Complete => Ok(self
+                .process_event(tracks)
+                .unwrap_or_else(|_| unreachable!())),
         }
     }
 
@@ -419,7 +390,7 @@ impl RocketClient {
     }
 
     // This function should never fail if [`poll_event_new`] and [`poll_event_incomplete`] are correct
-    fn process_event(&mut self) -> Result<ReceiveResult, io::Error> {
+    fn process_event(&mut self, tracks: &mut Tracks) -> Result<ReceiveResult, io::Error> {
         let mut result = ReceiveResult::None;
 
         let mut cursor = Cursor::new(&self.cmd);
@@ -431,7 +402,7 @@ impl RocketClient {
                 // I'd imagine Vec::push and everything else will panic first.
                 // If you're running this on a microcontroller, I'd love to see it!
                 let index = usize::try_from(cursor.read_u32::<BigEndian>()?).unwrap();
-                let track = &mut self.tracks[index];
+                let track = &mut tracks.inner[index];
                 let row = cursor.read_u32::<BigEndian>()?;
                 let value = cursor.read_f32::<BigEndian>()?;
                 let interpolation = Interpolation::from(cursor.read_u8()?);
@@ -441,7 +412,7 @@ impl RocketClient {
             }
             DELETE_KEY => {
                 let index = usize::try_from(cursor.read_u32::<BigEndian>()?).unwrap();
-                let track = &mut self.tracks[index];
+                let track = &mut tracks.inner[index];
                 let row = cursor.read_u32::<BigEndian>()?;
 
                 track.delete_key(row);
