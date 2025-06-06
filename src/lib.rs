@@ -10,8 +10,6 @@
 //! Most of the crate implementation is public in the [`lowlevel`] module.
 //! It's not recommended to use the low level API directly, use [`rocket`] instead.
 //!
-//! The [`lowlevel::client`] module contains the types which you need to connect to a Rocket tracker.
-//!
 //! # Features
 //!
 //! | Feature   | Purpose                                                                           |
