@@ -152,11 +152,11 @@ pub struct Rocket<P: AsRef<Path>> {
     #[cfg(not(feature = "player"))]
     tracker_row: u32,
     #[cfg(not(feature = "player"))]
-    connected: bool,
+    connected: bool, // This is false when the rocket client has encountered an error
     #[cfg(not(feature = "player"))]
     connection_attempted: std::time::Instant,
     #[cfg(not(feature = "player"))]
-    rocket: crate::RocketClient,
+    rocket: Option<crate::RocketClient>, // TODO: Make the client work on borrowed tracks so this Option isn't needed
     #[cfg(feature = "player")]
     rocket: crate::RocketPlayer,
 }
@@ -166,8 +166,7 @@ impl<P: AsRef<Path>> Rocket<P> {
     ///
     /// # Without `player` feature
     ///
-    /// Attempts to connect to a rocket tracker, and retries indefinitely every 1s if connection can't be established,
-    /// during which the function doesn't return and the caller is **blocked**.
+    /// Attempts to connect to a rocket tracker.
     ///
     /// # With `player` feature
     ///
@@ -183,12 +182,7 @@ impl<P: AsRef<Path>> Rocket<P> {
     /// or [`ok`](Result::ok) if you want to ignore the error and continue without using rocket.
     pub fn new(path: P, bpm: f32) -> Result<Self, DecodeError> {
         #[cfg(not(feature = "player"))]
-        let rocket = loop {
-            match Self::connect() {
-                Ok(rocket) => break rocket,
-                Err(_) => std::thread::sleep(Duration::from_secs(1)),
-            }
-        };
+        let rocket = Self::connect().ok();
 
         #[cfg(feature = "player")]
         let rocket = {
@@ -228,7 +222,7 @@ impl<P: AsRef<Path>> Rocket<P> {
             #[cfg(not(feature = "player"))]
             tracker_row: 0,
             #[cfg(not(feature = "player"))]
-            connected: true,
+            connected: rocket.is_some(),
             #[cfg(not(feature = "player"))]
             connection_attempted: std::time::Instant::now(),
             rocket,
@@ -243,9 +237,13 @@ impl<P: AsRef<Path>> Rocket<P> {
     /// the function handles the error by printing to stderr and panicking.
     pub fn get_value(&mut self, track: &str) -> f32 {
         #[cfg(not(feature = "player"))]
-        let track = match self.rocket.get_track_mut(track) {
-            Ok(track) => track,
-            Err(_) => {
+        let track = match self
+            .rocket
+            .as_mut()
+            .and_then(|rocket| rocket.get_track_mut(track).ok())
+        {
+            Some(track) => track,
+            None => {
                 self.connected = false;
                 return 0.;
             }
@@ -276,12 +274,13 @@ impl<P: AsRef<Path>> Rocket<P> {
         {
             let row = self.row as u32;
             if self.connected && row != self.tracker_row {
-                match self.rocket.set_row(row) {
-                    Ok(()) => self.tracker_row = row,
-                    Err(ref e) => {
+                match self.rocket.as_mut().map(|rocket| rocket.set_row(row)) {
+                    Some(Ok(())) => self.tracker_row = row,
+                    Some(Err(ref e)) => {
                         print_errors(PREFIX, e);
                         self.connected = false;
                     }
+                    None => self.connected = false,
                 }
             }
         }
@@ -346,7 +345,7 @@ impl<P: AsRef<Path>> Rocket<P> {
     pub fn poll_events(&mut self) -> Result<Option<Event>, EncodeError> {
         #[cfg(not(feature = "player"))]
         loop {
-            if !self.connected {
+            if !self.connected || self.rocket.is_none() {
                 // Don't spam connect
                 if self.connection_attempted.elapsed() < Duration::from_secs(1) {
                     return Ok(Some(Event::NotConnected));
@@ -354,14 +353,14 @@ impl<P: AsRef<Path>> Rocket<P> {
                 self.connection_attempted = std::time::Instant::now();
                 match Self::connect() {
                     Ok(rocket) => {
-                        self.rocket = rocket;
+                        self.rocket = Some(rocket);
                         self.connected = true;
                     }
                     Err(_) => return Ok(Some(Event::NotConnected)),
                 }
             }
-            match self.rocket.poll_events() {
-                Ok(Some(event)) => {
+            match self.rocket.as_mut().map(|rocket| rocket.poll_events()) {
+                Some(Ok(Some(event))) => {
                     let handled = match event {
                         crate::client::Event::SetRow(row) => {
                             self.tracker_row = row;
@@ -376,11 +375,12 @@ impl<P: AsRef<Path>> Rocket<P> {
                     };
                     return Ok(Some(handled));
                 }
-                Ok(None) => return Ok(None),
-                Err(ref e) => {
+                Some(Ok(None)) => return Ok(None),
+                Some(Err(ref e)) => {
                     print_errors(PREFIX, e);
                     self.connected = false;
                 }
+                None => self.connected = false,
             }
         }
 
@@ -404,7 +404,7 @@ impl<P: AsRef<Path>> Rocket<P> {
     /// The function is a no-op.
     pub fn save_tracks(&self) -> Result<(), EncodeError> {
         #[cfg(not(feature = "player"))]
-        {
+        if let Some(rocket) = &self.rocket {
             let open_result = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
@@ -423,7 +423,7 @@ impl<P: AsRef<Path>> Rocket<P> {
                 }
             };
 
-            let tracks = self.rocket.save_tracks();
+            let tracks = rocket.save_tracks();
             match bincode::encode_into_std_write(tracks, &mut file, bincode::config::standard()) {
                 Ok(_) => {
                     print_msg(
@@ -441,6 +441,15 @@ impl<P: AsRef<Path>> Rocket<P> {
                     Err(e)
                 }
             }
+        } else {
+            print_msg(
+                PREFIX,
+                &format!(
+                    "Did not connect, not able to save {}",
+                    self.path.as_ref().display()
+                ),
+            );
+            Ok(())
         }
 
         #[cfg(feature = "player")]
