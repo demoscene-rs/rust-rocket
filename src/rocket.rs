@@ -220,6 +220,11 @@ impl Rocket {
         }
     }
 
+    /// Get row number based on previous call to [`set_time`](Rocket::set_time)
+    pub fn get_row(&self) -> f32 {
+        self.row
+    }
+
     /// Poll for new events from rocket.
     ///
     /// # When the `client` feature is enabled
