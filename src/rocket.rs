@@ -1,4 +1,4 @@
-//! An abstraction for the [lower level API](crate::lowlevel).
+//! A rocket implementation that transparently handles reconnection and music beat time conversion.
 //!
 //! Errors are printed to stderr, and the connection to the tracker will be automatically re-established
 //! as long as [`poll_events`](Rocket::poll_events) is called frequently enough.
@@ -54,7 +54,6 @@
 //!                 Event::Seek(to) => music.seek(to),
 //!                 Event::Pause(state) => music.pause(state),
 //!                 Event::SaveTracks => {/* Call rocket.get_tracks() and serialize to a file */},
-//!                 Event::NotConnected => break,
 //!             }
 //!         }
 //!
@@ -68,18 +67,22 @@
 //! }
 //! ```
 //!
-//! For a more thorough example,
-//! see [`examples/simple.rs`](https://github.com/demoscene-rs/rust-rocket/blob/master/examples/simple.rs).
+//! See [`examples/simple.rs`](https://github.com/demoscene-rs/rust-rocket/blob/master/examples/simple.rs)
+//! for a more thorough example and how to save and load [`Tracks`].
 //!
-//! **Caution**: reconnection will wipe track state. Make sure to use the save feature in the editor!
+//! **Caution**: establishing a new connection to the tracker will clear previously loaded or pre-existing track state.
+//! Make sure to use the save feature in the editor!
+//! This is by design, the tracker is a server with authority over all rocket clients that are connected to it.
+//! You should treat the tracker save button as your "source code" of the tracks, and
+//! [`Tracks`] as a compiled artifact that is only used for playback in release builds.
 
 #[cfg(feature = "client")]
 use crate::lowlevel::client::{self, Client};
 use crate::lowlevel::Tracks;
 use std::time::Duration;
 
-const SECS_PER_MINUTE: f32 = 60.;
-const ROWS_PER_BEAT: f32 = 8.;
+const SECS_PER_MINUTE: f64 = 60.;
+const ROWS_PER_BEAT: f64 = 8.;
 const PREFIX: &str = "rocket";
 
 /// Print a message to stderr. Prefixed with `prefix: `.
@@ -107,23 +110,6 @@ pub enum Event {
     Pause(bool),
     /// The tracker asks you to export tracks.
     SaveTracks,
-    /// The client is not connected. Next calls to [`poll_events`](Rocket::poll_events) will eventually attempt to
-    /// reconnect.
-    ///
-    /// There are three equally sensible ways to handle this variant:
-    ///
-    /// 1. `break`: End your event polling `while let`-loop and proceed to rendering the frame.
-    ///    All [`Rocket`] methods keep working, but without control from the tracker.
-    /// 2. `continue 'main`: Restart your main loop, don't render the frame.
-    ///    This lets you keep calling other event polling functions from other libraries, e.g. SDL or winit.
-    /// 3. `{}`: Ignore it and let your event polling loop continue.
-    ///
-    /// Options 2 and 3 result is a busy wait, e.g. waste a lot of CPU time.
-    /// It's better to combine them with `std::thread::sleep` for at least a few milliseconds in order to mitigate that.
-    ///
-    /// See [`simple.rs`](https://github.com/demoscene-rs/rust-rocket/blob/master/examples/simple.rs) in the
-    /// `examples`-directory.
-    NotConnected,
 }
 
 /// Provides sync values.
@@ -132,8 +118,8 @@ pub enum Event {
 ///
 /// See [module documentation](crate::rocket#Usage).
 pub struct Rocket {
-    bps: f32,
-    row: f32,
+    bps: f64,
+    row: f64,
     tracks: Tracks,
     #[cfg(feature = "client")]
     tracker_row: u32,
@@ -154,7 +140,7 @@ impl Rocket {
         let client = Self::connect().ok();
 
         Self {
-            bps: bpm / SECS_PER_MINUTE,
+            bps: bpm as f64 / SECS_PER_MINUTE,
             row: 0.,
             tracks,
             #[cfg(feature = "client")]
@@ -195,12 +181,12 @@ impl Rocket {
             panic!("{}: Can't recover", PREFIX);
         });
 
-        track.get_value(self.row)
+        track.get_value(self.row as f32)
     }
 
     /// Update rocket with the current time from your time source, e.g. music player.
     pub fn set_time(&mut self, time: &Duration) {
-        let beat = time.as_secs_f32() * self.bps;
+        let beat = time.as_secs_f64() * self.bps;
         self.row = beat * ROWS_PER_BEAT;
 
         #[cfg(feature = "client")]
@@ -221,7 +207,7 @@ impl Rocket {
     }
 
     /// Get row number based on previous call to [`set_time`](Rocket::set_time)
-    pub fn get_row(&self) -> f32 {
+    pub fn get_row(&self) -> f64 {
         self.row
     }
 
@@ -252,23 +238,9 @@ impl Rocket {
     ///         Event::Seek(to) => music.seek(to),
     ///         Event::Pause(state) => music.pause(state),
     ///         Event::SaveTracks => {/* Call rocket.get_tracks() and serialize to a file */},
-    ///         Event::NotConnected => break,
     ///     }
     /// }
     /// ```
-    ///
-    /// # Tips
-    ///
-    /// There are three sensible ways to handle the `Event::NotConnected` variant:
-    ///
-    /// 1. `break`: End your event polling `while let`-loop and proceed to rendering the frame.
-    ///    All [`Rocket`] methods keep working, but without control from the tracker.
-    /// 2. `continue 'main`: Restart your main loop, don't render the frame.
-    ///    This lets you keep calling other event polling functions from other libraries, e.g. SDL or winit.
-    /// 3. `{}`: Ignore it and let your event polling loop continue.
-    ///
-    /// Options 2 and 3 result is a busy wait, e.g. waste a lot of CPU time.
-    /// It's better to combine them with `std::thread::sleep` for at least a few milliseconds in order to mitigate that.
     ///
     /// # Without `client` feature
     ///
@@ -280,14 +252,15 @@ impl Rocket {
                 None => {
                     // Don't spam connect
                     if self.connection_attempted.elapsed() < Duration::from_secs(1) {
-                        return Some(Event::NotConnected);
+                        return None;
                     }
                     self.connection_attempted = std::time::Instant::now();
                     match Self::connect() {
                         Ok(rocket) => {
                             self.client = Some(rocket);
+                            self.tracks.clear();
                         }
-                        Err(_) => return Some(Event::NotConnected),
+                        Err(_) => return None,
                     }
                 }
                 Some(client) => match client.poll_events(&mut self.tracks) {
@@ -295,8 +268,8 @@ impl Rocket {
                         let handled = match event {
                             client::Event::SetRow(row) => {
                                 self.tracker_row = row;
-                                let beat = row as f32 / ROWS_PER_BEAT;
-                                Event::Seek(Duration::from_secs_f32(beat / self.bps))
+                                let beat = row as f64 / ROWS_PER_BEAT;
+                                Event::Seek(Duration::from_secs_f64(beat / self.bps))
                             }
                             client::Event::Pause(flag) => Event::Pause(flag),
                             client::Event::SaveTracks => Event::SaveTracks,
@@ -324,6 +297,17 @@ impl Rocket {
     /// example.
     pub fn get_tracks(&self) -> &Tracks {
         &self.tracks
+    }
+
+    /// Get the state of the connection to the tracker.
+    ///
+    /// Returns `true` when the client is connected to the tracker, otherwise `false`.
+    pub fn is_connected(&self) -> bool {
+        #[cfg(feature = "client")]
+        return self.client.is_some();
+
+        #[cfg(not(feature = "client"))]
+        return false;
     }
 
     #[cfg(feature = "client")]

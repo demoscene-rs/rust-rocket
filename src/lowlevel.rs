@@ -25,9 +25,14 @@ impl Tracks {
         self.inner.iter().find(|t| t.get_name() == name)
     }
 
-    /// Provides read only access to [`Track`]s within.
+    /// Provides read only access to the [`Track`]s in the collection.
     pub fn as_slice(&self) -> &[Track] {
         self.inner.as_slice()
+    }
+
+    /// Drops all tracks in the collection.
+    pub fn clear(&mut self) {
+        self.inner.clear();
     }
 }
 

@@ -55,20 +55,20 @@ fn save_tracks(tracks: &Tracks) {
 }
 
 fn main() {
-    // Load tracks if not acting as a rocket client
-    let tracks: Tracks = if cfg!(feature = "client") {
-        Tracks::default()
-    } else {
-        let mut file = File::open("tracks.bin").unwrap();
-        bincode::decode_from_std_read(&mut file, bincode::config::standard()).unwrap()
-    };
+    // Load previously saved tracks, defaulting to empty tracks if file cannot be loaded
+    let tracks = File::open("tracks.bin")
+        .ok()
+        .and_then(|mut file| {
+            bincode::decode_from_std_read(&mut file, bincode::config::standard()).ok()
+        })
+        .unwrap_or_default();
 
     // Initialize rocket and time source
     let mut rocket = Rocket::new(tracks, 60.);
     let mut time_source = TimeSource::new();
     let mut previous_print_time = Duration::ZERO;
 
-    'main: loop {
+    loop {
         // <Handle other event sources such as SDL or winit here>
 
         // Handle events from the rocket tracker
@@ -77,12 +77,6 @@ fn main() {
                 Event::Seek(to) => time_source.seek(to),
                 Event::Pause(state) => time_source.pause(state),
                 Event::SaveTracks => save_tracks(rocket.get_tracks()),
-                Event::NotConnected =>
-                /* Alternatively: break the loop here and keep rendering frames */
-                {
-                    std::thread::sleep(Duration::from_millis(10));
-                    continue 'main;
-                }
             }
         }
 
