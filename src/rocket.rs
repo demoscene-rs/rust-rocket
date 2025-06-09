@@ -81,6 +81,7 @@ use crate::lowlevel::client::{self, Client};
 use crate::lowlevel::Tracks;
 use std::time::Duration;
 
+const CONNECTION_INTERVAL: Duration = Duration::from_secs(1);
 const SECS_PER_MINUTE: f64 = 60.;
 const ROWS_PER_BEAT: f64 = 8.;
 const PREFIX: &str = "rocket";
@@ -131,13 +132,9 @@ pub struct Rocket {
 
 impl Rocket {
     /// Initializes rocket.
-    ///
-    /// # When the `client` feature is enabled
-    ///
-    /// Attempts to connect to a rocket tracker.
     pub fn new(tracks: Tracks, bpm: f32) -> Self {
         #[cfg(feature = "client")]
-        let client = Self::connect().ok();
+        let now = std::time::Instant::now();
 
         Self {
             bps: bpm as f64 / SECS_PER_MINUTE,
@@ -146,9 +143,9 @@ impl Rocket {
             #[cfg(feature = "client")]
             tracker_row: 0,
             #[cfg(feature = "client")]
-            connection_attempted: std::time::Instant::now(),
+            connection_attempted: now.checked_sub(CONNECTION_INTERVAL).unwrap_or(now),
             #[cfg(feature = "client")]
-            client,
+            client: None,
         }
     }
 
@@ -251,7 +248,7 @@ impl Rocket {
             match &mut self.client {
                 None => {
                     // Don't spam connect
-                    if self.connection_attempted.elapsed() < Duration::from_secs(1) {
+                    if self.connection_attempted.elapsed() < CONNECTION_INTERVAL {
                         return None;
                     }
                     self.connection_attempted = std::time::Instant::now();
