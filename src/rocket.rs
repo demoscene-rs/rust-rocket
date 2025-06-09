@@ -188,7 +188,7 @@ impl Rocket {
 
         #[cfg(feature = "client")]
         {
-            let row = self.row as u32;
+            let row = (self.row + 0.5) as u32;
             if let Some(client) = &mut self.client {
                 if row != self.tracker_row {
                     match client.set_row(row) {
