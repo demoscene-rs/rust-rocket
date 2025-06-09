@@ -66,7 +66,7 @@ fn main() {
     // Initialize rocket and time source
     let mut rocket = Rocket::new(tracks, 60.);
     let mut time_source = TimeSource::new();
-    let mut previous_print_time = Duration::ZERO;
+    let mut previous_print_time = Instant::now();
 
     loop {
         // <Handle other event sources such as SDL or winit here>
@@ -74,7 +74,10 @@ fn main() {
         // Handle events from the rocket tracker
         while let Some(event) = rocket.poll_events() {
             match event {
-                Event::Seek(to) => time_source.seek(to),
+                Event::Seek(to) => {
+                    println!("Seeking to {:?}", to);
+                    time_source.seek(to);
+                }
                 Event::Pause(state) => time_source.pause(state),
                 Event::SaveTracks => save_tracks(rocket.get_tracks()),
             }
@@ -86,11 +89,20 @@ fn main() {
 
         // <In a full demo you would render a frame here>
 
-        // Filter redundant output
-        if time != previous_print_time {
-            println!("{:?}: test = {}", time, rocket.get_value("test"));
+        // Print every 1s
+        if previous_print_time.elapsed() >= Duration::from_secs(1) {
+            println!(
+                "State = {}, row = {:?}, track value = {}",
+                if time_source.paused {
+                    "paused"
+                } else {
+                    "playing"
+                },
+                rocket.get_row(),
+                rocket.get_value("test")
+            );
+            previous_print_time = Instant::now();
         }
-        previous_print_time = time;
         thread::sleep(Duration::from_millis(10));
     }
 }
