@@ -272,7 +272,7 @@ impl<P: AsRef<Path>> Rocket<P> {
 
         #[cfg(not(feature = "player"))]
         {
-            let row = self.row as u32;
+            let row = (self.row + 0.5) as u32;
             if self.connected && row != self.tracker_row {
                 match self.rocket.as_mut().map(|rocket| rocket.set_row(row)) {
                     Some(Ok(())) => self.tracker_row = row,
