@@ -82,8 +82,8 @@ use crate::lowlevel::Tracks;
 use std::time::Duration;
 
 const CONNECTION_INTERVAL: Duration = Duration::from_secs(1);
-const SECS_PER_MINUTE: f64 = 60.;
-const ROWS_PER_BEAT: f64 = 8.;
+const SECS_PER_MINUTE: f32 = 60.;
+const ROWS_PER_BEAT: f32 = 8.;
 const PREFIX: &str = "rocket";
 
 /// Print a message to stderr. Prefixed with `prefix: `.
@@ -119,8 +119,8 @@ pub enum Event {
 ///
 /// See [module documentation](crate::rocket#Usage).
 pub struct Rocket {
-    bps: f64,
-    row: f64,
+    bps: f32,
+    row: f32,
     tracks: Tracks,
     #[cfg(feature = "client")]
     tracker_row: u32,
@@ -137,7 +137,7 @@ impl Rocket {
         let now = std::time::Instant::now();
 
         Self {
-            bps: bpm as f64 / SECS_PER_MINUTE,
+            bps: bpm / SECS_PER_MINUTE,
             row: 0.,
             tracks,
             #[cfg(feature = "client")]
@@ -178,12 +178,12 @@ impl Rocket {
             panic!("{}: Can't recover", PREFIX);
         });
 
-        track.get_value(self.row as f32)
+        track.get_value(self.row)
     }
 
     /// Update rocket with the current time from your time source, e.g. music player.
     pub fn set_time(&mut self, time: &Duration) {
-        let beat = time.as_secs_f64() * self.bps;
+        let beat = time.as_secs_f32() * self.bps;
         self.row = beat * ROWS_PER_BEAT;
 
         #[cfg(feature = "client")]
@@ -204,7 +204,7 @@ impl Rocket {
     }
 
     /// Get row number based on previous call to [`set_time`](Rocket::set_time)
-    pub fn get_row(&self) -> f64 {
+    pub fn get_row(&self) -> f32 {
         self.row
     }
 
@@ -265,8 +265,8 @@ impl Rocket {
                         let handled = match event {
                             client::Event::SetRow(row) => {
                                 self.tracker_row = row;
-                                let beat = row as f64 / ROWS_PER_BEAT;
-                                Event::Seek(Duration::from_secs_f64(beat / self.bps))
+                                let beat = row as f32 / ROWS_PER_BEAT;
+                                Event::Seek(Duration::from_secs_f32(beat / self.bps))
                             }
                             client::Event::Pause(flag) => Event::Pause(flag),
                             client::Event::SaveTracks => Event::SaveTracks,
